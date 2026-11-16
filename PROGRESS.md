@@ -110,5 +110,32 @@ The remaining bottleneck is the 3D LUT inside FFmpeg (about 70 fps on its own) c
 - Per-segment effects (zoom punch, shake, flash, RGB split, motion blur) and text overlays are in the schema but rejected by the renderer until Phase 3.
 - The demo clips are synthetic test patterns. Judging the grades properly needs real footage.
 
-### Next: Phase 3, effects
-Smooth slow-mo (minterpolate on CPU, RIFE when there's a GPU), zoom punch, shake, flash, motion blur, RGB split and text, with one demo video per effect.
+## Phase 3: Effects. Done
+
+### What's done
+- **Smooth slow motion** (`render/source.py`).
+  - Frames between recorded frames are made with optical flow (OpenCV DIS): motion is estimated between frame pairs, both frames are warped to the in-between moment and blended.
+  - "fast" (previews) and "high" (export) quality settings; `interpolation="off"` repeats frames.
+  - **Change from your spec:** I used OpenCV optical flow instead of FFmpeg `minterpolate`. It handles any speed curve per output frame rather than needing a fixed target frame rate, it's faster, and it avoids minterpolate's block artifacts.
+  - **RIFE is not included:** this machine has no GPU to build or test it on.
+- **Zoom punch**: instant scale-in, ease-out-cubic back over `decay`. Centred on the crop/face point.
+- **Shake**: smooth seeded wobble (offset plus up to about 1.5° of rotation) with a decaying envelope. The frame is automatically scaled up just enough that the rotated, shifted window never leaves the source, so no black edges appear (tested with 1,200 random cases and full renders).
+- **Flash**: full strength on the beat frame, fading over N frames, any colour.
+- **RGB split**: red and blue channels pushed apart, closing over N frames.
+- **Motion blur**: virtual shutter averaging in-between frames across 1.5 frames of motion, used during fast sections.
+- **Text**:
+  - drawn once with Pillow, with a soft outline for legibility;
+  - "pop" (scales 1.35 to 1.0 on the beat), "fade" and "none" animations;
+  - bundled OFL fonts (Cinzel, Anton, Inter; licences in `assets/fonts`);
+  - composited after the colour grade, so white stays white under any look.
+- **Frame-accurate timing:** every effect starts on output frame `round((segment start + t) * fps)`. A test checks the flash is white on exactly the beat frame.
+- **Deterministic shake:** the seed comes from a checksum, not Python's per-process `hash()`, so the same timeline shakes the same way every time.
+- **136 tests.**
+
+### Demos (on your clips)
+`samples/phase3/make_demos.py` writes one timeline plus video per effect: `slowmo` (side by side: repeated frames vs smooth), `velocity_ramp` (3x snapping to 0.3x on the beat, with blur), `zoom_punch`, `shake`, `flash`, `rgb_split`, `text`, `motion_blur` (side by side). The videos use your clips, so they stay out of the repo; the timelines are in the script.
+
+### Speed
+Optical flow and motion blur cost time. On this 4-core machine at 1080x1920 30 fps, a 3.3 s clip takes about 9 s with plain effects, 20 s with slow-mo or blur throughout. Real edits use slow-mo and blur for only part of the length; Phase 5 measures a full edit against the 90 s target.
+
+### Next: Phase 4, video analysis and auto-reframe

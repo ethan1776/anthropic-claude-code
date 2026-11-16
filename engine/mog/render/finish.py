@@ -1,11 +1,13 @@
 """The final FFmpeg pass: colour grade, glow, vignette, grain, audio, encode.
 
-Inputs: 0 = raw BGR frames from Python, 1 = the music.
+Inputs: 0 = raw BGR frames from Python, 1 = the music, 2.. = text overlay images.
 
   1. ONE 3D LUT holding the whole per-pixel grade: look LUT + strength + black crush +
      contrast/brightness/gamma + saturation (baked in grade_lut.py; ~4x faster than
      running those as separate filters)
-  2. convert to YUV Rec.709, then film grain on luma only (last, so the grade doesn't amplify it)
+  2. convert to YUV Rec.709
+  3. text overlays (after the grade, so a white caption stays white)
+  4. film grain on luma only (last, so the grade doesn't amplify it)
 
 Glow and vignette are applied per frame in Python before frames reach FFmpeg
 (pixel_fx.py): measured much cheaper there than as FFmpeg filters.
@@ -18,7 +20,8 @@ from pathlib import Path
 
 from mog.color.grade_lut import bake
 from mog.ffmpeg.filtergraph import F, Graph
-from mog.timeline.models import Audio, Grade
+from mog.render.text import add_text_overlays
+from mog.timeline.models import Audio, Grade, TextOverlay
 
 GRAIN_SEED = 20240611  # fixed so the same timeline renders the same grain
 
@@ -48,7 +51,8 @@ class FinishGraph:
 
 
 def build_graph(grade: Grade, width: int, height: int, duration: float, audio: Audio, fps: int,
-                search_dirs: list[Path] = ()) -> FinishGraph:
+                search_dirs: list[Path] = (), texts: list[TextOverlay] = (), text_pngs: list[Path] = ()
+                ) -> FinishGraph:
     g = Graph()
     cur = "0:v"
 
@@ -64,11 +68,18 @@ def build_graph(grade: Grade, width: int, height: int, duration: float, audio: A
     if lut is not None:
         step([F("lut3d", file=str(lut), interp="tetrahedral")])
 
-    yuv = [F("scale", out_color_matrix="bt709", out_range="tv"), F("format", pix_fmts="yuv420p")]
+    step([F("scale", out_color_matrix="bt709", out_range="tv"), F("format", pix_fmts="yuv420p")])
+
+    # Text after the grade (so captions keep their colour), before grain (so they sit in the film)
+    extra: list[list[str]] = []
+    if texts:
+        cur, extra = add_text_overlays(g, cur, list(texts), list(text_pngs), 2, width, height, fps)
+
+    last = [F("format", pix_fmts="yuv420p")]
     if grade.grain > 0:
         # Temporal (changes every frame) uniform noise on luma only = monochrome film grain
-        yuv.append(F("noise", c0s=round(grade.grain * 28, 2), c0f="t+u", c0_seed=GRAIN_SEED))
-    g.add([cur], yuv, ["vout"])
+        last.append(F("noise", c0s=round(grade.grain * 28, 2), c0f="t+u", c0_seed=GRAIN_SEED))
+    g.add([cur], last, ["vout"])
 
     fade_in = min(audio.fade_in, duration / 2)
     fade_out = min(audio.fade_out, duration / 2)
@@ -79,7 +90,7 @@ def build_graph(grade: Grade, width: int, height: int, duration: float, audio: A
         afilters.append(F("afade", t="out", st=round(duration - fade_out, 6), d=fade_out))
     afilters += [F("apad"), F("atrim", end=round(duration, 6))]
     g.add(["1:a"], afilters, ["aout"])
-    return FinishGraph(g.render(), [])
+    return FinishGraph(g.render(), extra)
 
 
 def encoder_args(fg: FinishGraph, audio_path: Path, audio: Audio, duration: float, fps: int,

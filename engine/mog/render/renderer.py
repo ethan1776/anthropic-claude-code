@@ -2,14 +2,15 @@
 
 Pipeline per output frame:
   1. which segment owns this frame, and which source moment it shows (speed curve)
-  2. read that source frame (FrameReader, frame-exact)
-  3. crop/zoom it into the 9:16 output with one affine warp (geometry.py)
-  4. pipe it to FFmpeg, which grades, adds grain/vignette, mixes in the music and encodes
+  2. get that source picture (frame-exact; an in-between frame for slow motion; blurred
+     for motion blur) (source.py)
+  3. crop / zoom punch / shake it into the 9:16 output with one affine warp (geometry.py)
+  4. per-pixel effects: exposure, RGB split, flash, glow, vignette (effects.py, pixel_fx.py)
+  5. pipe it to FFmpeg, which applies the grade LUT, text and grain, mixes in the music and encodes
 
-Phase 2 supports: cuts, speed curves (nearest-frame sampling), crop/zoom/face-track paths,
-grade (LUT, contrast, saturation, black crush, glow), grain, vignette, audio fades.
-Per-segment effects and text overlays are Phase 3; a timeline that uses them is rejected
-with a clear message instead of rendering without them.
+Supports: cuts, speed curves with smooth slow motion (optical-flow in-between frames),
+crop/zoom/face-track paths, zoom punch, shake, flash, RGB split, motion blur, exposure,
+grade (LUT, contrast, saturation, black crush, glow), vignette, grain, text, audio fades.
 """
 
 from __future__ import annotations
@@ -23,13 +24,16 @@ import cv2
 import numpy as np
 
 from mog.errors import MogError
-from mog.ffmpeg.frames import FrameReader, FrameWriter
+from mog.ffmpeg.frames import FrameWriter
 from mog.ffmpeg.probe import probe_video
 from mog.render.finish import EncodeSettings, build_graph, encoder_args
+from mog.render.effects import apply_flash, apply_rgb_split, segment_effects
 from mog.render.geometry import apply_affine, crop_center, window_affine
 from mog.render.pixel_fx import Glow, Vignette, exposure_table
 from mog.timeline.models import Timeline
-from mog.timeline.speed import segment_source_times
+from mog.render.source import FrameSource
+from mog.render.text import render_text_png
+from mog.timeline.speed import segment_source_times, speed_at
 from mog.video.ingest import Clip, ingest
 
 Progress = Callable[[str, float], None]
@@ -46,25 +50,18 @@ class RenderResult:
     warnings: list[str] = field(default_factory=list)
 
 
-def _check_supported(tl: Timeline) -> None:
-    used = sorted({e.type for s in tl.segments for e in s.effects})
-    if used:
-        raise MogError(f"This timeline uses effects ({', '.join(used)}) that the renderer adds in Phase 3.")
-    if tl.text:
-        raise MogError("This timeline has text overlays, which the renderer adds in Phase 3.")
-
-
 def _even(x: float) -> int:
     return max(2, int(round(x / 2)) * 2)
 
 
 def render(tl: Timeline, out_path: str | Path, media_dir: str | Path, preview: bool = False,
-           progress: Progress | None = None) -> RenderResult:
+           progress: Progress | None = None, interpolation: str | None = None) -> RenderResult:
+    """interpolation: how slow motion is smoothed. "fast" / "high" (optical flow, see
+    source.py) or "off" (repeat frames). Default: fast for previews, high for export."""
     t_start = time.time()
     out_path = Path(out_path)
     media_dir = Path(media_dir)
     report = progress or (lambda stage, frac: None)
-    _check_supported(tl)
     warnings: list[str] = []
 
     # ---- inputs
@@ -89,10 +86,14 @@ def render(tl: Timeline, out_path: str | Path, media_dir: str | Path, preview: b
         W, H = _even(W / 2), _even(H / 2)
     settings = EncodeSettings.preview() if preview else EncodeSettings.export()
     quality = "fast" if preview else "high"
+    interp = interpolation or ("fast" if preview else "high")
+    if interp not in ("off", "fast", "high"):
+        raise MogError(f"interpolation must be off, fast or high (got {interp!r})")
     total = int(round(tl.output.duration * fps))
 
     # ---- plan every frame up front, so footage problems fail before any encoding starts
     plans = []
+    src_t_of: dict[str, np.ndarray] = {}
     for seg in tl.segments:
         clip = clips[seg.source]
         frames, src_t = segment_source_times(seg, fps)
@@ -104,10 +105,14 @@ def render(tl: Timeline, out_path: str | Path, media_dir: str | Path, preview: b
                            f"but the clip is only {clip.duration:.2f}s long.")
         src_idx = np.minimum(np.floor(src_t * float(clip.fps) + 1e-6).astype(int), clip.frames - 1)
         plans.append((seg, clip, frames, src_idx))
+        src_t_of[seg.id] = np.minimum(src_t, (clip.frames - 1) / float(clip.fps))
 
     tmp = out_path.with_name(out_path.stem + ".part" + out_path.suffix)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    graph = build_graph(tl.grade, W, H, tl.output.duration, tl.audio, fps, [media_dir])
+    from mog.video.ingest import cache_dir
+
+    pngs = [render_text_png(tx, W, H, cache_dir().parent / "text") for tx in tl.text]
+    graph = build_graph(tl.grade, W, H, tl.output.duration, tl.audio, fps, [media_dir], tl.text, pngs)
     writer = FrameWriter(W, H, fps, encoder_args(graph, audio_path, tl.audio, tl.output.duration, fps,
                                                  tmp, settings))
     # Glow before vignette (the glow shouldn't be darkened twice at the edges); the LUT runs
@@ -126,20 +131,37 @@ def render(tl: Timeline, out_path: str | Path, media_dir: str | Path, preview: b
             d = min(1.0, cover * 1.5)
             dw, dh = _even(clip.width * d), _even(clip.height * d)
             expo = exposure_table(seg.exposure)
-            with FrameReader(clip.path, clip.fps, int(src_idx[0]), clip.width, clip.height,
-                             out_size=(dw, dh)) as reader:
-                for n, k in zip(frames, src_idx):
+            fxs = segment_effects(seg, frames, fps, W)
+            local = frames / fps - seg.timeline_in
+            speeds = speed_at(seg.speed_curve, local, seg.ease)
+            with FrameSource(clip.path, clip.fps, clip.frames, int(src_idx[0]), clip.width, clip.height,
+                             (dw, dh), quality=interp if interp != "off" else "fast") as source:
+                for n, t_src, t_local, v, fx in zip(frames, src_t_of[seg.id], local, speeds, fxs):
                     if n != written:
                         raise MogError(f"internal: frame order broken at segment {seg.id} ({n} != {written})")
-                    src = reader.frame_at(int(k))
-                    t_local = n / fps - seg.timeline_in
-                    cx, cy = crop_center(seg.crop, t_local)
-                    m = window_affine(dw, dh, W, H, cx, cy, seg.crop.zoom)
+                    # 1. the source picture: in-between frames for slow motion, shutter blur on request
+                    smooth = interp != "off" and v < 0.95
+                    if fx.blur > 0:
+                        # Virtual shutter: 1.5 output frames of motion (an exaggerated "540 degree"
+                        # shutter: phonk edits want streaky blur), capped at 6 source frames
+                        span = min(1.5 * v / fps, 6.0 / float(clip.fps))
+                        src = source.blurred(t_src, span, fx.blur)
+                    else:
+                        src = source.sample(t_src, smooth=smooth)
+                    # 2. crop / follow / zoom punch / shake: one warp
+                    cx, cy = (0.5, 0.5) if fx.anchor_center and seg.crop.mode == "center" else crop_center(
+                        seg.crop, t_local)
+                    m = window_affine(dw, dh, W, H, cx, cy, seg.crop.zoom * fx.zoom, (fx.dx, fx.dy), fx.angle)
                     frame = apply_affine(src, m, W, H, quality)
+                    # 3. per-pixel effects
                     if expo is not None:
                         frame = cv2.LUT(frame, expo)
-                    for fx in post:
-                        frame = fx(frame)
+                    if fx.rgb_split > 0:
+                        frame = apply_rgb_split(frame, fx.rgb_split)
+                    if fx.flash > 0:
+                        frame = apply_flash(frame, fx.flash, fx.flash_color)
+                    for p in post:
+                        frame = p(frame)
                     writer.write(frame)
                     written += 1
                     if written % 15 == 0:

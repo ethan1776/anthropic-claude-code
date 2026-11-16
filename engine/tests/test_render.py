@@ -51,7 +51,7 @@ def test_cuts_and_speeds_are_frame_exact(media, tmp_path):
          "speed_curve": [[0, 0.5]]},
         {"id": "s4", "source": "c60.mp4", "src_in": 0.5, "timeline_in": 1.5, "timeline_out": 2.0},
     ], 2.0)
-    res = render(t, tmp_path / "o.mp4", media)
+    res = render(t, tmp_path / "o.mp4", media, interpolation="off")
     got = [read_barcode(f) for f in decode(res.path)]
     expect = ([30 + i for i in range(15)]                  # a from 1.0 s, 1x
               + [2000 + 2 * i for i in range(15)]          # b at 2x
@@ -138,7 +138,6 @@ def test_progress_is_reported(media, tmp_path):
 @pytest.mark.parametrize("seg,msg", [
     ({"source": "missing.mp4"}, "Missing clip"),
     ({"src_in": 7.5}, "only 8.00s long"),
-    ({"effects": [{"type": "flash", "t": 0.1}]}, "Phase 3"),
 ])
 def test_clear_errors(media, tmp_path, seg, msg):
     s = {"id": "s1", "source": "a.mp4", "src_in": 0, "timeline_in": 0, "timeline_out": 1.0}
@@ -186,3 +185,74 @@ def test_standard_fps_prefers_declared_rate():
     assert standard_fps(Fraction(363900, 6061), Fraction(60)) == 60
     assert standard_fps(Fraction(2997, 100), Fraction(90000, 1)) == Fraction(30000, 1001)  # bogus declared rate
     assert standard_fps(Fraction(240), None) == 60
+
+
+def test_slow_motion_makes_in_between_frames(media, tmp_path):
+    """A bright square moving 8 px per source frame, at 0.25x speed: with interpolation the
+    square should advance ~2 px per output frame instead of jumping 8 px every 4th frame."""
+    src = media / "square.mp4"
+    from mog.ffmpeg.frames import FrameWriter
+
+    wr = FrameWriter(W, H, 30, ["-c:v", "libx264", "-crf", "10", "-pix_fmt", "yuv420p", str(src)])
+    for k in range(60):
+        f = np.full((H, W, 3), 30, np.uint8)
+        x = 40 + 4 * k
+        f[300:360, x:x + 60] = 230
+        wr.write(f)
+    wr.close()
+
+    def positions(interp):
+        t = tl([{"id": "s", "source": "square.mp4", "src_in": 0.5, "timeline_in": 0, "timeline_out": 1.0,
+                 "speed_curve": [[0, 0.25]]}], 1.0)
+        frames = decode(render(t, tmp_path / f"{interp}.mp4", media, interpolation=interp).path)
+        xs = []
+        for f in frames[2:-2]:
+            col = f[330, :, 1].astype(float)
+            xs.append(float(np.average(np.arange(W), weights=np.maximum(col - 80, 0))))
+        return np.diff(xs)
+
+    steps_off, steps_on = positions("off"), positions("fast")
+    assert np.max(steps_off) > 3.0          # without: still, still, still, JUMP
+    assert np.max(np.abs(steps_on - np.median(steps_on))) < 1.0  # with: even ~1 px steps
+    assert 0.6 < np.median(steps_on) < 1.4
+
+
+def test_effects_render_without_black_edges(media, tmp_path):
+    """Shake + zoom punch + rgb split on a clip with no zoom headroom must never show a
+    black (or replicated-edge) border."""
+    t = tl([{"id": "s", "source": "a.mp4", "src_in": 0, "timeline_in": 0, "timeline_out": 2.0,
+             "effects": [{"type": "shake", "t": 0.2, "intensity": 60, "decay": 1.5},
+                         {"type": "zoom_punch", "t": 0.5, "strength": 1.3, "decay": 0.4},
+                         {"type": "rgb_split", "t": 1.0, "frames": 6, "offset": 20}]}], 2.0)
+    frames = decode(render(t, tmp_path / "o.mp4", media).path)
+    for f in frames:
+        for edge in (f[0], f[-1], f[:, 0], f[:, -1]):
+            assert edge.mean() > 25  # barcode clip background is grey 40; black would be ~0
+    # and the picture actually moved during the shake
+    assert np.abs(frames[10].astype(int) - frames[0].astype(int)).mean() > 2
+
+
+def test_flash_lands_on_the_beat_frame(media, tmp_path):
+    # Segment starts at 0.5 s; flash at segment time 0.3 => output time 0.8 s => frame 24 at 30 fps
+    t = tl([{"id": "a", "source": "a.mp4", "src_in": 0, "timeline_in": 0, "timeline_out": 0.5},
+            {"id": "b", "source": "b.mp4", "src_in": 0, "timeline_in": 0.5, "timeline_out": 1.5,
+             "effects": [{"type": "flash", "t": 0.3, "frames": 2}]}], 1.5)
+    frames = decode(render(t, tmp_path / "o.mp4", media).path)
+    bright = [float(f.mean()) for f in frames]
+    assert bright[24] > 240                  # full white on the beat frame
+    assert 120 < bright[25] < 220            # half strength on the next
+    assert bright[23] < 120 and bright[26] < 120
+
+
+def test_text_overlay_appears_in_its_window(media, tmp_path):
+    t = tl([{"id": "s", "source": "a.mp4", "src_in": 0, "timeline_in": 0, "timeline_out": 2.0}], 2.0,
+           grade={"lut": "teal_cold.cube"},
+           text=[{"content": "HE DOESN'T CHASE", "t_in": 0.5, "t_out": 1.5, "font": "Anton", "y": 0.15,
+                  "anim": "pop"}])
+    frames = decode(render(t, tmp_path / "o.mp4", media).path)
+    band = slice(int(0.1 * H), int(0.2 * H))
+    def whiteness(f):
+        return float((f[band].min(axis=2) > 200).mean())
+    assert whiteness(frames[5]) < 0.01                     # before t_in: no text
+    assert whiteness(frames[30]) > 0.05                    # during: white text (not tinted teal)
+    assert whiteness(frames[55]) < 0.01                    # after t_out: gone
