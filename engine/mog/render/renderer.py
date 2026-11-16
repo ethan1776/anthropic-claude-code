@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+import cv2
 import numpy as np
 
 from mog.errors import MogError
@@ -26,7 +27,7 @@ from mog.ffmpeg.frames import FrameReader, FrameWriter
 from mog.ffmpeg.probe import probe_video
 from mog.render.finish import EncodeSettings, build_graph, encoder_args
 from mog.render.geometry import apply_affine, crop_center, window_affine
-from mog.render.pixel_fx import Glow, Vignette
+from mog.render.pixel_fx import Glow, Vignette, exposure_table
 from mog.timeline.models import Timeline
 from mog.timeline.speed import segment_source_times
 from mog.video.ingest import Clip, ingest
@@ -64,6 +65,7 @@ def render(tl: Timeline, out_path: str | Path, media_dir: str | Path, preview: b
     media_dir = Path(media_dir)
     report = progress or (lambda stage, frac: None)
     _check_supported(tl)
+    warnings: list[str] = []
 
     # ---- inputs
     missing = sorted({s.source for s in tl.segments if not (media_dir / s.source).exists()})
@@ -78,6 +80,7 @@ def render(tl: Timeline, out_path: str | Path, media_dir: str | Path, preview: b
     for i, name in enumerate(sources):
         report("Preparing clips", i / len(sources))
         clips[name] = ingest(media_dir / name)
+        warnings.extend(clips[name].warnings)
 
     # ---- output size
     fps = tl.output.fps
@@ -122,6 +125,7 @@ def render(tl: Timeline, out_path: str | Path, media_dir: str | Path, preview: b
             cover = max(W / clip.width, H / clip.height)
             d = min(1.0, cover * 1.5)
             dw, dh = _even(clip.width * d), _even(clip.height * d)
+            expo = exposure_table(seg.exposure)
             with FrameReader(clip.path, clip.fps, int(src_idx[0]), clip.width, clip.height,
                              out_size=(dw, dh)) as reader:
                 for n, k in zip(frames, src_idx):
@@ -132,6 +136,8 @@ def render(tl: Timeline, out_path: str | Path, media_dir: str | Path, preview: b
                     cx, cy = crop_center(seg.crop, t_local)
                     m = window_affine(dw, dh, W, H, cx, cy, seg.crop.zoom)
                     frame = apply_affine(src, m, W, H, quality)
+                    if expo is not None:
+                        frame = cv2.LUT(frame, expo)
                     for fx in post:
                         frame = fx(frame)
                     writer.write(frame)
@@ -153,4 +159,4 @@ def render(tl: Timeline, out_path: str | Path, media_dir: str | Path, preview: b
         raise MogError(f"Output check failed: got {info.width}x{info.height}, {info.frames} frames, "
                        f"audio={info.has_audio}; expected {W}x{H}, {total} frames, audio.")
     tmp.replace(out_path)
-    return RenderResult(out_path, W, H, fps, total, time.time() - t_start)
+    return RenderResult(out_path, W, H, fps, total, time.time() - t_start, warnings)

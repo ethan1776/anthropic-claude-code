@@ -174,3 +174,15 @@ def test_ingest_rejects_non_video(tmp_path):
     p.write_bytes(b"not a video")
     with pytest.raises(MogError, match="doesn't look like a video"):
         ingest(p)
+
+
+def test_standard_fps_prefers_declared_rate():
+    from fractions import Fraction
+
+    from mog.video.ingest import standard_fps
+
+    assert standard_fps(Fraction(1225, 47), Fraction(25)) == 25          # real clip: avg 26.06, declared 25
+    assert standard_fps(Fraction(26), Fraction(30)) == 30                # VFR phone clip that dropped frames
+    assert standard_fps(Fraction(363900, 6061), Fraction(60)) == 60
+    assert standard_fps(Fraction(2997, 100), Fraction(90000, 1)) == Fraction(30000, 1001)  # bogus declared rate
+    assert standard_fps(Fraction(240), None) == 60

@@ -37,6 +37,7 @@ class Clip:
     """A normalized clip, ready for the renderer."""
 
     source: str        # original file name (what timelines refer to)
+    warnings: list[str]
     path: Path         # the normalized intermediate
     width: int
     height: int
@@ -54,8 +55,17 @@ def cache_dir() -> Path:
     return d
 
 
-def standard_fps(fps: Fraction) -> Fraction:
-    """Snap a measured frame rate (e.g. 29.97003 from a VFR phone clip) to a standard rate."""
+def standard_fps(fps: Fraction, nominal: Fraction | None = None) -> Fraction:
+    """Pick the clip's frame rate from the standard ones.
+
+    Prefer the declared (nominal) rate when it is standard: a variable-frame-rate phone clip
+    declared as 30 fps but averaging 26 (it dropped frames in low light) is still a 30 fps
+    recording. Otherwise snap the measured average to the nearest standard rate."""
+    if nominal is not None:
+        # closest standard rate (29.97 and 30 are only 0.1% apart, so "first within tolerance" is wrong)
+        r = min(STANDARD_RATES, key=lambda r: abs(float(nominal) - float(r)))
+        if abs(float(nominal) - float(r)) / float(r) < 0.0005:
+            return r
     if fps > 60:
         return Fraction(60)  # 120/240 fps slow-mo phone clips: keep 60 real frames per second
     return min(STANDARD_RATES, key=lambda r: abs(float(r) - float(fps)))
@@ -93,7 +103,7 @@ def _video_filter(info: VideoInfo, tw: int, th: int, fps: Fraction) -> str:
 def ingest(path: str | Path, force: bool = False) -> Clip:
     path = Path(path)
     info = probe_video(path)
-    fps = standard_fps(info.fps)
+    fps = standard_fps(info.fps, info.nominal_fps)
     tw, th = target_size(info.width, info.height)
     out = cache_dir() / f"{path.stem[:40]}-{_key(path)}.mp4"
     if force or not out.exists():
@@ -116,4 +126,10 @@ def ingest(path: str | Path, force: bool = False) -> Clip:
     norm = probe_video(out, count_frames=True)
     if norm.frames is None or norm.frames < 1:
         raise MogError(f"{path.name} produced no video frames.")
-    return Clip(source=path.name, path=out, width=norm.width, height=norm.height, fps=fps, frames=norm.frames)
+    warnings = []
+    cover = max(MAX_OUT_W / info.width, MAX_OUT_H / info.height)
+    if cover > 2.0:
+        warnings.append(f"{path.name} is low resolution ({info.width}x{info.height}); it has to be enlarged "
+                        f"{cover:.1f}x to fill a 1080x1920 frame and will look soft.")
+    return Clip(source=path.name, warnings=warnings, path=out, width=norm.width, height=norm.height, fps=fps,
+                frames=norm.frames)

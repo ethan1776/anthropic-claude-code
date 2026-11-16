@@ -127,3 +127,16 @@ def test_glow_only_brightens():
     assert np.all(out.astype(int) >= f.astype(int))
     dark = np.full((192, 108, 3), 40, np.uint8)
     assert np.array_equal(Glow(108, 192, 1.0)(dark), dark)  # nothing above the threshold
+
+
+def test_exposure_table():
+    from mog.render.pixel_fx import exposure_table
+
+    assert exposure_table(0) is None
+    up, down = exposure_table(1.0), exposure_table(-1.0)
+    assert up[0] == 0 and up[255] >= 250 and down[0] == 0
+    assert np.all(np.diff(up.astype(int)) >= 0) and np.all(np.diff(down.astype(int)) >= 0)
+    # +1 stop on mid-grey (~118) is roughly +37% in sRGB values; -1 stop roughly -27%
+    assert 150 < up[118] < 175 and 75 < down[118] < 95
+    # highlights roll off: nothing below 90% input clips to white
+    assert up[230] < 255

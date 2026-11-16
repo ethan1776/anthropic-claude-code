@@ -92,6 +92,8 @@ def _cmd_render(args: argparse.Namespace) -> None:
     res = render(tl, args.out, media, preview=args.preview, progress=progress)
     print(f"\nwrote {res.path}  {res.width}x{res.height} @ {res.fps} fps, {res.frames} frames, "
           f"{res.frames / res.fps:.2f}s of video in {res.seconds:.1f}s")
+    for w in res.warnings:
+        print(f"  ! {w}")
 
 
 def _cmd_testclips(args: argparse.Namespace) -> None:

@@ -16,7 +16,7 @@ import numpy as np
 
 from mog.errors import MogError
 
-LUT_VERSION = 1
+LUT_VERSION = 2
 SIZE = 33
 LUMA = np.array([0.2126, 0.7152, 0.0722])  # Rec.709 luminance weights
 
@@ -46,8 +46,8 @@ def _split_tone(rgb: np.ndarray, shadow: tuple, highlight: tuple, amount: float)
 def bw_crush(rgb):
     """Dark Triad: black & white, crushed blacks, hard contrast, very slightly cool."""
     y = _luma(rgb)
-    y = np.clip((y - 0.05) / 0.9, 0, 1)      # crush the toe, clip the very top
-    y = _s_curve(y, 0.85) ** 1.12
+    y = np.clip((y - 0.025) / 0.95, 0, 1)    # gentle toe crush (grade.black_crush adds more)
+    y = _s_curve(y, 0.7) ** 1.05
     out = np.stack([y, y, y * 1.0 + 0.01 * (1 - y)], -1)
     return np.clip(out, 0, 1)
 

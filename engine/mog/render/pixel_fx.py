@@ -47,3 +47,19 @@ class Glow:
         # screen blend: 1 - (1 - a)(1 - b)  ==  a + b - a*b
         inv = cv2.multiply(cv2.bitwise_not(frame), cv2.bitwise_not(glow), scale=1 / 255)
         return cv2.bitwise_not(inv)
+
+
+def exposure_table(stops: float) -> np.ndarray | None:
+    """256-entry table that brightens/darkens by `stops`, done in (approximately) linear light
+    so it behaves like a camera exposure change. Brightening rolls highlights off smoothly
+    instead of clipping them to flat white. None for 0 stops."""
+    if abs(stops) < 1e-6:
+        return None
+    x = np.arange(256, dtype=np.float64) / 255
+    lin = x ** 2.2 * (2.0 ** stops)
+    if stops > 0:
+        knee = 0.6                                                # soft shoulder above 60%
+        over = np.maximum(lin - knee, 0)
+        lin = np.where(lin > knee, knee + (1 - knee) * (1 - np.exp(-over / (1 - knee))), lin)
+    out = np.clip(lin, 0, 1) ** (1 / 2.2)
+    return np.clip(out * 255 + 0.5, 0, 255).astype(np.uint8)

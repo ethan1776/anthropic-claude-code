@@ -83,7 +83,7 @@ Fixes made from these tracks:
   - Preview mode: 540x960, fast preset.
 - **No black edges, by construction:** the crop window is clamped inside the source (tested with 1,200 random crops and zooms).
 - **Same timeline, same output:** two renders produce byte-identical frames (tested).
-- **130 tests** in about 21 s.
+- **132 tests** in about 20 s.
 
 ### Sample
 `samples/phase2/sample_timeline.json` uses 4 synthetic clips (landscape 30 fps, vertical 60 fps, 4:3 24 fps, rotated 29.97 fps phone clip) and the synthetic phonk track. `samples/phase2/sample_frames.png` shows frames from the render.
@@ -95,6 +95,15 @@ Fixes made from these tracks:
 | Preview, 540x960 @ 60 fps | 14 s |
 
 The remaining bottleneck is the 3D LUT inside FFmpeg (about 70 fps on its own) competing with the x264 encoder for 4 cores. Phase 3's effects and slow-motion interpolation will add cost. If the 90 s target gets tight, the planned fix is rendering chunks of the timeline in parallel and joining them.
+
+### Tested on your real clips (5 files from Google Drive; kept out of the repo)
+- **Ingest handled everything:** HEVC, full-range colour, variable frame rate, sizes from 386x484 to 1320x2868. It now prefers a clip's declared frame rate (a variable-rate phone clip declared at 30 fps stays 30), and warns about low-resolution clips (3 of the 5 need over 2x enlargement).
+- **The looks were too dark on low-light footage.** Dark Triad and Mog crushed a dimly lit podcast shot nearly to black. Fixes:
+  - a new per-segment `exposure` setting (in stops) corrects each shot before the grade; Phase 4 will set it automatically from face brightness;
+  - the black & white LUT's built-in shadow crush is gentler.
+- **Findings for Phase 4:**
+  - screen recordings include the phone's status bar and app buttons, and some clips have letterbox bars or watermarks; auto-crop must remove these;
+  - one clip has a screenshot cut into the middle, which should become a separate low-scoring shot.
 
 ### Known limitations
 - Slow motion currently repeats frames (choppy). Smooth interpolated slow-mo is Phase 3.

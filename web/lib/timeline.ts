@@ -76,6 +76,8 @@ export interface Segment {
   /** [[t, speed], ...]: playback speed keyframes (segment-local t). 1 = normal, 0.3 = slow-mo. */
   speed_curve: [number, number][];
   ease: "linear" | "smoothstep" | "cubic";
+  /** Brightness correction in stops before the grade (+1 = twice as bright) */
+  exposure: number;
   crop: Crop;
   effects: (ZoomPunch | Shake | Flash | RgbSplit | MotionBlur)[];
 }

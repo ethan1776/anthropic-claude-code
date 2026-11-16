@@ -24,7 +24,8 @@ class VideoInfo:
     path: Path
     width: int            # as displayed (rotation applied)
     height: int
-    fps: Fraction         # nominal frame rate
+    fps: Fraction         # average frame rate (what was actually recorded)
+    nominal_fps: Fraction | None  # the container's declared rate (r_frame_rate)
     duration: float
     rotation: int         # degrees, from phone metadata
     pix_fmt: str
@@ -80,7 +81,8 @@ def probe_video(path: str | Path, count_frames: bool = False) -> VideoInfo:
         raise MogError(f"{path.name} has no duration (is it a still image?).")
     frames = int(video["nb_read_packets"]) if count_frames and "nb_read_packets" in video else None
     return VideoInfo(
-        path=path, width=w, height=h, fps=fps, duration=duration, rotation=rotation,
+        path=path, width=w, height=h, fps=fps, nominal_fps=_fraction(video.get("r_frame_rate")),
+        duration=duration, rotation=rotation,
         pix_fmt=video.get("pix_fmt", ""), color_transfer=video.get("color_transfer", "") or "",
         has_audio=any(s.get("codec_type") == "audio" for s in streams), frames=frames,
     )

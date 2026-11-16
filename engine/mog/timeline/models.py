@@ -154,6 +154,8 @@ class Segment(_Strict):
         description="[[t, speed], ...]: playback speed keyframes (segment-local t). 1 = normal, 0.3 = slow-mo.",
     )
     ease: Ease = "smoothstep"
+    exposure: float = Field(0.0, ge=-3.0, le=3.0,
+                            description="Brightness correction in stops before the grade (+1 = twice as bright)")
     crop: Crop = Field(default_factory=Crop)
     effects: list[Effect] = Field(default_factory=list)
 

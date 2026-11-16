@@ -434,6 +434,14 @@
           "title": "Ease",
           "type": "string"
         },
+        "exposure": {
+          "default": 0.0,
+          "description": "Brightness correction in stops before the grade (+1 = twice as bright)",
+          "maximum": 3.0,
+          "minimum": -3.0,
+          "title": "Exposure",
+          "type": "number"
+        },
         "crop": {
           "$ref": "#/$defs/Crop"
         },
@@ -479,6 +487,7 @@
         "timeline_out",
         "speed_curve",
         "ease",
+        "exposure",
         "crop",
         "effects"
       ],
