@@ -370,14 +370,21 @@ class Planner:
             except _NeedTooLong:
                 # No shot is long enough for this speed: slow the segment down to fit the longest shot
                 longest = max(s.duration for cl in self.clips for s in cl.shots)
-                f = max((longest - FOOTAGE_MARGIN) / need, 0.05)
+                f = (longest - 3 * FOOTAGE_MARGIN) / need * 0.97   # margin: avoid an exact-fit float miss
                 c.speed_curve = [(t, max(v * f, 0.05)) for t, v in c.speed_curve]
                 seg = self._segment(i, c)
                 need = footage_needed(seg)
                 self.warnings.append(f"Clips are short: slowed segment {i + 1} to fit the footage.")
-                pk = self.pick(c.role, need)
+                try:
+                    pk = self.pick(c.role, need)
+                except _NeedTooLong:
+                    raise MogError(f"Your clips are too short for this edit: the longest shot is {longest:.1f}s. "
+                                   f"Add longer clips or pick a shorter edit length.") from None
             reused += pk.reused
             segs.append(self._fill(seg, pk, c.effects))
+        if not any(sh.face_path for c in self.clips for sh in c.shots):
+            self.warnings.append("No faces found in your clips: framing follows the motion instead. "
+                                 "Clips with a clear face make the best slow-mo moments.")
         if reused:
             self.warnings.append(f"Not enough footage for a {self.D:.0f}s edit without repeats: reused {reused} "
                                  f"shot(s) with a different crop. Add more clips for a better edit.")

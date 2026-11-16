@@ -85,6 +85,9 @@ async def _validation_error(_req: Request, exc: ValidationError):
 def rate_limit(request: Request) -> None:
     """At most N heavy jobs per client IP per hour (simple fixed window in Redis)."""
     ip = request.client.host if request.client else "unknown"
+    if settings().trust_proxy:
+        fwd = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        ip = fwd or ip
     key = f"mog:rl:{ip}:{int(time.time() // 3600)}"
     r = redis_conn()
     n = r.incr(key)

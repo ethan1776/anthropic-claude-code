@@ -1,69 +1,118 @@
-# MOG: auto phonk / velocity edit generator
+# MOG: auto phonk / velocity edits
 
-Upload clips and a phonk track, pick a style, and get a beat-synced 9:16 edit.
+Upload a few clips and a phonk track, pick a style, and get a beat-synced, vertical (9:16)
+edit ready for TikTok, Reels and Shorts. MOG finds the beat and the drop, scouts your
+footage for faces and motion, directs the edit (cuts on the beat, velocity ramps, slow-mo
+stare on the drop, flashes, punches, shake), grades it and renders it.
 
-> Only use clips and music you have the rights to post.
+> Only use clips and music you have the rights to post. MOG only edits files you upload;
+> it never downloads from other sites. Unsaved projects are deleted after 24 hours.
 
-**Status:** Phases 1–2 of 8 done (audio analysis, basic renderer; CLI only). See [PROGRESS.md](PROGRESS.md).
+## Run it (one command)
 
-## Setup
+Needs [Docker](https://docs.docker.com/get-docker/) with Compose.
 
-You need Python 3.11+ and FFmpeg.
+```bash
+docker compose up --build
+```
+
+Then open **http://localhost:3000**. The first build takes a few minutes. Data lives in the
+`data` Docker volume.
+
+| Service | What it does | Port |
+|---|---|---|
+| `web` | Next.js app (what you open in the browser) | 3000 |
+| `api` | FastAPI: uploads, projects, jobs | 8000 |
+| `worker` | Analyses audio/video and renders edits | – |
+| `redis` | Job queue | – |
+
+More render capacity: `docker compose up --scale worker=2`.
+More accurate beat/downbeat tracking (adds PyTorch, ~700 MB):
+`docker compose build --build-arg INSTALL_BEATS=1`.
+
+## Command line (no Docker)
+
+Python 3.11+ and FFmpeg 6+.
 
 ```bash
 cd engine
-pip install -e ".[dev]"
-# optional, more accurate beats + downbeats (downloads PyTorch, ~700 MB):
-pip install -e ".[beats]"
+pip install -e ".[dev,server]"
+
+# A whole edit in one go
+python -m mog make --clips a.mp4 b.mov c.mp4 --audio track.mp3 --preset mog --length 15 \
+                   --text "he doesn't chase." --out edit.mp4
+python -m mog presets                      # dark_triad, mog, velocity, drift_phonk, clean_sigma
+
+# The steps on their own
+python -m mog debug track.mp3 --out out/    # beat/drop plot + click track to check by ear
+python -m mog scout clip.mp4 --debug out/   # shots, faces, scores, crop preview
+python -m mog reframe clip.mp4 --out v.mp4  # auto-reframe a horizontal clip to 9:16
+python -m mog render timeline.json --media DIR --out v.mp4 [--preview]
 ```
 
-## Try it
+Options for `make`:
+- `--seed N`: a different edit with the same settings (the app's "Re-roll").
+- `--intensity 0..1`: more or fewer effects.
+- `--start S`: choose the song section yourself.
+- `--fps 30|60`, `--preview`: half resolution, fast.
+- `--plan-only`: writes just the timeline JSON.
+
+### Developing the app without Docker
 
 ```bash
-cd engine
-# Analyze a track: BPM, beats, downbeats, drums, drop, best 15 s section
-python -m mog analyze path/to/track.mp3 --length 15 --json analysis.json
-
-# Same, plus a debug plot and click tracks to check accuracy by eye and ear
-python -m mog debug path/to/track.mp3 --out out/debug --length 15
-
-# No track handy? Generate a synthetic phonk-style one
-python -m mog synth out/test.wav --bpm 145
-
-# Run the tests
-python -m pytest
+redis-server &                                         # or: docker run -p 6379:6379 redis:7-alpine
+cd engine && uvicorn mog.api.app:app --port 8000 &     # API
+cd engine && rq worker mog &                           # worker
+cd web && npm install && npm run dev                   # http://localhost:3000 (API_URL defaults to :8000)
 ```
 
-`debug` writes:
+## How it works
 
-| File | What it's for |
-|---|---|
-| `<name>.debug.png` | Waveform with beats (grey), downbeats (white), kicks / snares / cowbells / hi-hats, energy curves, the drop (red) and the chosen section (green). The bottom panel zooms in on the drop. |
-| `<name>.clicks.wav` | The song with clicks on each detected beat: a high click on beat 1, a lower click on the others, and a ping at the drop. If the clicks sound locked to the drums, detection is right. |
-| `<name>.section-clicks.wav` | The same, cut to just the section the edit would use. |
-| `<name>.analysis.json` | Everything the planner will use. |
+```
+upload ─► ingest (CFR, rotation, HDR→SDR) ─► audio analysis (beats, downbeats, drums, drop, section)
+                                         └─► video analysis (shots, faces, motion, content area, scores)
+       ─► planner ─► timeline JSON ─► renderer (OpenCV warps + effects ─► FFmpeg grade/text/grain/encode)
+```
 
-See `samples/phase1/` for example output.
+The **timeline JSON** is the single source of truth. The planner only writes it, the
+renderer only reads it, and the editor in the app changes it. Its schema is in
+`engine/mog/timeline/models.py`, with TypeScript types in `web/lib/timeline.ts`.
+**Presets** are plain JSON in `presets/`; add a style by adding a file.
 
-## Render a timeline (Phase 2)
+```
+engine/mog/
+  audio/      beat + downbeat tracking, drum onsets, drop, section picker, debug plots
+  video/      ingest, shot detection, faces (YuNet), content area, tracking, scores, reframe
+  planner/    the edit planner, presets, editor operations
+  render/     renderer, geometry (crop/zoom/shake), slow-mo interpolation, effects, text, finish
+  timeline/   the timeline schema + speed-curve maths
+  api/        FastAPI app        worker/  RQ jobs        storage.py  local disk (S3-ready interface)
+web/          Next.js app (upload → song → style → generate → edit → export)
+presets/      the 5 styles        assets/  fonts (OFL) + face model (MIT)
+```
 
-A timeline is a JSON file describing the edit: which clip plays when, at what speed and
-crop, plus the colour grade and the music section. The format is defined in
-`engine/mog/timeline/models.py`; TypeScript types for the web app are in `web/lib/timeline.ts`.
+## Configuration (environment variables)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `MOG_DATA` | `./data` | Where uploads and renders are stored |
+| `MOG_CACHE` | `~/.cache/mog` | Converted clips, analyses, LUTs (old entries pruned after 48 h) |
+| `REDIS_URL` | `redis://localhost:6379/0` | Job queue |
+| `MOG_MAX_CLIPS` | `10` | Clips per project |
+| `MOG_MAX_UPLOAD_BYTES` | 2 GB | Total clip size per project |
+| `MOG_MAX_AUDIO_BYTES` | 300 MB | Song size |
+| `MOG_RETENTION_HOURS` | `24` | Unsaved projects are deleted after this |
+| `MOG_JOBS_PER_HOUR` | `60` | Render/upload jobs per client IP per hour |
+| `MOG_TRUST_PROXY` | off | Use `X-Forwarded-For` for rate limits (set in Compose; the web app proxies `/api`) |
+| `API_URL` | `http://localhost:8000` | (web) where the Python API is |
+
+## Tests
 
 ```bash
-cd engine
-# Demo media: 4 synthetic clips + a synthetic phonk track
-python -m mog testclips out/media
-python -m mog synth out/media/phonk145.wav --bpm 145
-
-# Render the hand-written sample timeline
-python -m mog render ../samples/phase2/sample_timeline.json --media out/media --out out/sample.mp4
-# Quick half-resolution preview
-python -m mog render ../samples/phase2/sample_timeline.json --media out/media --out out/preview.mp4 --preview
-
-# After changing the timeline models, regenerate the JSON Schema + TypeScript types
-python -m mog schema
+cd engine && python -m pytest          # ~180 tests, ~4 min
+cd web && npm run typecheck && npm run build
+# Browser end-to-end (needs the stack running and Playwright installed):
+cd web && CLIPS=a.mp4,b.mov AUDIO=song.mp3 node e2e/smoke.mjs
 ```
 
-Converted clips and generated LUTs are cached in `~/.cache/mog` (set `MOG_CACHE` to move it).
+See [PROGRESS.md](PROGRESS.md) for what's done, measured speed and accuracy, and known limitations.

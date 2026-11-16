@@ -19,6 +19,7 @@ services:
     environment:
       REDIS_URL: redis://redis:6379/0
       MOG_CORS_ORIGINS: http://localhost:3000
+      MOG_TRUST_PROXY: "1"      # requests arrive via the web app's /api proxy
     volumes:
       - data:/data
     ports:

@@ -236,4 +236,49 @@ Optical flow and motion blur cost time. On this 4-core machine at 1080x1920 30 f
   - the style cards now lead with your footage;
   - the caption moved to 70% height, above TikTok/Reels' own bottom overlay.
 
-### Next: Phase 8, polish
+## Phase 8: Polish. Done
+
+- **Error handling:** every failure gives a plain-English message (in the UI, API, CLI and job status), never a traceback. Covered by tests:
+  - bad or broken files;
+  - unsupported types;
+  - too many clips, files too large;
+  - song too short;
+  - song shorter than the edit (uses the whole song, with a warning);
+  - no faces in any clip (framing follows motion, with a note);
+  - too little footage (reuses shots with a new crop, with a warning);
+  - clips too short for a cut (slows it, or explains);
+  - unknown preset;
+  - invalid timeline;
+  - API offline (the web proxy says so).
+- **Temp files:** staging folders and half-written `.part` renders are removed after every job (tested). Caches are pruned after 48 h; unsaved projects are deleted after 24 h (tested).
+- **Limits:**
+  - rate limiting per client IP, made proxy-aware so all users don't share the web container's limit;
+  - upload size and count limits, enforced while streaming (an oversized upload is cut off, not stored).
+- **README** with one-command setup (`docker compose up --build`).
+
+## Quality checklist
+
+| Requirement | Status | Evidence |
+|---|---|---|
+| Every cut, flash and speed snap within ±1 frame of the beat | ✅ | Cuts round to the nearest frame (≤ half a frame; test). Flash is white on exactly the beat frame (test). Ramp snaps land on downbeats (test). Beats detected within 1–3 ms (Phase 1). |
+| Slow motion never stutters | ✅ | Optical-flow in-between frames; a moving test square advances evenly instead of jumping (test). |
+| Shake and zoom never reveal black borders | ✅ | Window maths keeps every sample inside the footage (1,400 random cases) and full renders with heavy shake have no black edge (test). |
+| Face reframing is smooth, no jitter | ✅ | Kalman + backward smoother: about 5x less jitter on a shaky webcam clip while following the full head movement. |
+| The drop is the most intense moment | ✅ | Flash + strongest punch + shake + slow-mo stare on the drop (test). |
+| Output plays/uploads correctly on TikTok, Instagram, YouTube Shorts | ⚠️ Spec-compliant, not tried on the platforms | H.264 High, yuv420p, Rec.709 tags, 1080x1920, 30/60 fps CFR, about 15.6 Mbps, AAC 320k 48 kHz, `+faststart` (tested). I can't upload to those platforms from here: please post one export to confirm. |
+| The same seed gives the same edit | ✅ | Same timeline from the same seed (and clip order doesn't matter); same timeline renders byte-identical frames (tests). |
+| Clear error messages, never a silent failure | ✅ | See Phase 8 above. |
+| Temp files cleaned up after every job | ✅ | Tested, plus 24 h / 48 h retention cleanup. |
+
+**Performance target** ("15 s edit from 3 clips in under 90 s on a decent CPU"): measured on this cloud machine (4 cores, no GPU):
+- 46–65 s for a 15 s edit once clips are analysed;
+- a first run adds 2–40 s of analysis per clip (cached after that);
+- through the full app, a preview is ready about 15–20 s after clicking Generate; the full-quality export takes about 30–60 s.
+- The GPU target (30 s) isn't measured: there's no GPU here, and RIFE isn't wired in.
+
+## Not done / out of scope
+- **Phase 9 (accounts and Stripe payments).** Not started. Your rules say to ask before adding paid services.
+- **Royalty-free track library.** Not included: I can't verify licences. Drop licensed tracks in if you want one.
+- **RIFE GPU interpolation.** Not wired in (no GPU to test on); CPU optical flow is used instead.
+- **`beat_this` ML tracker.** Wired in and optional (`INSTALL_BEATS=1`), but never run here: this machine's network blocks its downloads.
+- **Not yet tried:** an actual upload of an export to TikTok, Instagram or YouTube (see above).
