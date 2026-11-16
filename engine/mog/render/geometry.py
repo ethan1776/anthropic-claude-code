@@ -29,14 +29,17 @@ def crop_center(crop: Crop, t_local: float) -> tuple[float, float]:
 
 
 def window_affine(src_w: int, src_h: int, out_w: int, out_h: int, cx: float, cy: float, zoom: float,
-                  offset_px: tuple[float, float] = (0.0, 0.0), angle_deg: float = 0.0) -> np.ndarray:
+                  offset_px: tuple[float, float] = (0.0, 0.0), angle_deg: float = 0.0,
+                  bounds: tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0)) -> np.ndarray:
     """2x3 matrix mapping source pixels to output pixels.
 
-    zoom 1 = the smallest scale at which the (unrotated) source fills the output.
+    zoom 1 = the smallest scale at which the (unrotated) content area fills the output.
     offset_px: shake offset in OUTPUT pixels. angle_deg: rotation (shake).
-    The result never samples outside the source.
+    bounds: the usable part of the source (fractions); never sampled outside of.
     """
-    cover = max(out_w / src_w, out_h / src_h)
+    bx0, by0 = bounds[0] * src_w, bounds[1] * src_h
+    bw_px, bh_px = (bounds[2] - bounds[0]) * src_w, (bounds[3] - bounds[1]) * src_h
+    cover = max(out_w / bw_px, out_h / bh_px)
     s = cover * max(zoom, 1.0)
     th = math.radians(angle_deg)
     c, si = abs(math.cos(th)), abs(math.sin(th))
@@ -44,13 +47,13 @@ def window_affine(src_w: int, src_h: int, out_w: int, out_h: int, cx: float, cy:
     bw = (out_w * c + out_h * si) / 2
     bh = (out_w * si + out_h * c) / 2
     # Overscale: grow s until that box fits in the source
-    s = max(s, 2 * bw / src_w, 2 * bh / src_h)
+    s = max(s, 2 * bw / bw_px, 2 * bh / bh_px)
     hx, hy = bw / s, bh / s  # box half-size in source pixels
     # Shake moves the picture by offset_px on screen => the window moves the other way
     ox = (offset_px[0] * math.cos(th) + offset_px[1] * math.sin(th)) / s
     oy = (-offset_px[0] * math.sin(th) + offset_px[1] * math.cos(th)) / s
-    x = float(np.clip(cx * src_w - ox, hx, src_w - hx))
-    y = float(np.clip(cy * src_h - oy, hy, src_h - hy))
+    x = float(np.clip(cx * src_w - ox, bx0 + hx, bx0 + bw_px - hx))
+    y = float(np.clip(cy * src_h - oy, by0 + hy, by0 + bh_px - hy))
     # dst = s * R * (src - centre) + out_centre, in edge coordinates; convert to pixel centres
     cos_t, sin_t = math.cos(th), math.sin(th)
     a = np.array([[s * cos_t, -s * sin_t], [s * sin_t, s * cos_t]])

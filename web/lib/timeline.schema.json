@@ -105,6 +105,33 @@
           ],
           "default": null,
           "title": "Path"
+        },
+        "bounds": {
+          "default": [
+            0.0,
+            0.0,
+            1.0,
+            1.0
+          ],
+          "description": "[x0, y0, x1, y1]: the part of the source that is real footage (excludes letterbox bars, phone status bars). The crop never shows anything outside it.",
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Bounds",
+          "type": "array"
         }
       },
       "required": [
@@ -112,7 +139,8 @@
         "x",
         "y",
         "zoom",
-        "path"
+        "path",
+        "bounds"
       ],
       "title": "Crop",
       "type": "object"

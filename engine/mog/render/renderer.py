@@ -151,7 +151,8 @@ def render(tl: Timeline, out_path: str | Path, media_dir: str | Path, preview: b
                     # 2. crop / follow / zoom punch / shake: one warp
                     cx, cy = (0.5, 0.5) if fx.anchor_center and seg.crop.mode == "center" else crop_center(
                         seg.crop, t_local)
-                    m = window_affine(dw, dh, W, H, cx, cy, seg.crop.zoom * fx.zoom, (fx.dx, fx.dy), fx.angle)
+                    m = window_affine(dw, dh, W, H, cx, cy, seg.crop.zoom * fx.zoom, (fx.dx, fx.dy), fx.angle,
+                                      seg.crop.bounds)
                     frame = apply_affine(src, m, W, H, quality)
                     # 3. per-pixel effects
                     if expo is not None:

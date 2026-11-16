@@ -6,6 +6,8 @@
     python -m mog render  TIMELINE.json --media DIR --out OUT.mp4 [--preview]
     python -m mog testclips DIR
     python -m mog schema  [--json OUT.schema.json] [--ts OUT.ts]
+    python -m mog scout   CLIP [--debug DIR]
+    python -m mog reframe CLIP --out OUT.mp4 [--max 15] [--preview]
 """
 
 from __future__ import annotations
@@ -112,6 +114,51 @@ def _cmd_schema(args: argparse.Namespace) -> None:
         print(f"wrote {write_typescript(Path(args.ts))}")
 
 
+def _cmd_scout(args: argparse.Namespace) -> None:
+    from mog.video.analyze import analyze_video
+
+    t = time.time()
+    an = analyze_video(args.clip, use_cache=not args.fresh)
+    print(f"\n{an.source}  {an.width}x{an.height} @ {an.fps:.2f} fps, {an.duration:.1f}s, "
+          f"analysed in {time.time() - t:.1f}s")
+    print(f"  content area: {an.content}")
+    print("   #   start    end   face frontal motion  stare action quality  exposure")
+    for s in an.shots:
+        print(f"  {s.index:2d} {s.start:7.2f} {s.end:6.2f}   {s.face_score:.2f}   {s.frontal:.2f}   {s.motion_score:.2f}"
+              f"   {s.stare_score:.2f}   {s.action_score:.2f}    {s.quality:.2f}    {s.exposure:+.2f}")
+    for w in an.warnings:
+        print(f"  ! {w}")
+    if args.debug:
+        from mog.video.reframe import debug_sheet
+
+        d = Path(args.debug)
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"{Path(args.clip).stem}.analysis.json").write_text(an.model_dump_json(indent=1))
+        print(f"  sheet: {debug_sheet(an, Path(args.clip), d / f'{Path(args.clip).stem}.shots.png')}")
+
+
+def _cmd_reframe(args: argparse.Namespace) -> None:
+    from mog.render.renderer import render
+    from mog.video.analyze import analyze_video
+    from mog.video.ingest import cache_dir
+    from mog.video.reframe import reframe_timeline, silent_wav
+
+    an = analyze_video(args.clip)
+    clip = Path(args.clip)
+    silent_wav(cache_dir().parent / "silence-600s.wav", 600)
+    tl = reframe_timeline(an, "silence-600s.wav", max_duration=args.max)
+    # Media dir must hold both the clip and the audio: link the silence next to the clip's cache
+    media = cache_dir().parent / "reframe-media"
+    media.mkdir(exist_ok=True)
+    for src, name in ((clip.resolve(), clip.name), (cache_dir().parent / "silence-600s.wav", "silence-600s.wav")):
+        link = media / name
+        if link.is_symlink() or link.exists():
+            link.unlink()
+        link.symlink_to(src)
+    res = render(tl, args.out, media, preview=args.preview)
+    print(f"wrote {res.path} ({len(tl.segments)} shots, {res.frames / res.fps:.1f}s) in {res.seconds:.1f}s")
+
+
 def _summary(an, sec, elapsed: float) -> None:
     kinds = {k: len(an.onsets_of(k)) for k in ("kick", "snare", "hihat", "cowbell")}
     print(f"\n{an.source}  ({an.duration:.1f}s, analyzed in {elapsed:.1f}s)")
@@ -169,6 +216,19 @@ def main(argv: list[str] | None = None) -> int:
     sc.add_argument("--json", default="../web/lib/timeline.schema.json")
     sc.add_argument("--ts", default="../web/lib/timeline.ts")
     sc.set_defaults(func=_cmd_schema)
+
+    sc2 = sub.add_parser("scout", help="analyse a video clip: shots, faces, scores")
+    sc2.add_argument("clip")
+    sc2.add_argument("--debug", help="write the analysis JSON and a debug image here")
+    sc2.add_argument("--fresh", action="store_true", help="ignore the analysis cache")
+    sc2.set_defaults(func=_cmd_scout)
+
+    rf = sub.add_parser("reframe", help="auto-reframe a clip to 9:16 following faces")
+    rf.add_argument("clip")
+    rf.add_argument("--out", default="out/reframed.mp4")
+    rf.add_argument("--max", type=float, default=15.0, help="max seconds to render")
+    rf.add_argument("--preview", action="store_true")
+    rf.set_defaults(func=_cmd_reframe)
 
     args = p.parse_args(argv)
     try:

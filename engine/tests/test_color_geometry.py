@@ -38,6 +38,18 @@ def test_window_never_leaves_the_source(src):
         assert x1 <= sw - 0.5 + 1e-6 and y1 <= sh - 0.5 + 1e-6
 
 
+def test_bounds_keep_window_inside_content_area():
+    # Phone screen recording: real footage only between 8% and 88% of the height
+    rng = np.random.default_rng(3)
+    b = (0.0, 0.08, 1.0, 0.88)
+    for _ in range(200):
+        m = window_affine(1320, 2868, 1080, 1920, *rng.uniform(0, 1, 2), rng.uniform(1, 2),
+                          tuple(rng.uniform(-80, 80, 2)), rng.uniform(-3, 3), bounds=b)
+        x0, y0, x1, y1 = visible_source_rect(m, 1080, 1920)
+        assert y0 >= 0.08 * 2868 - 0.5 - 1e-6 and y1 <= 0.88 * 2868 - 0.5 + 1e-6
+        assert x0 >= -0.5 - 1e-6 and x1 <= 1320 - 0.5 + 1e-6
+
+
 def test_shake_offset_moves_the_picture():
     # Room to move: zoomed 1.5x. Offset +30 px on screen => content moves right by 30 px
     m0 = window_affine(1920, 1080, 1080, 1920, 0.5, 0.5, 1.5)

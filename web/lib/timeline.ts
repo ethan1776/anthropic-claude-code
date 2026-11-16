@@ -17,6 +17,8 @@ export interface Crop {
   y: number;
   zoom: number;
   path: [number, number, number][] | null;
+  /** [x0, y0, x1, y1]: the part of the source that is real footage (excludes letterbox bars, phone status bars). The crop never shows anything outside it. */
+  bounds: [number, number, number, number];
 }
 
 export interface Flash {

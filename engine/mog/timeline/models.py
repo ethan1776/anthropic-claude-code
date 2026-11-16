@@ -79,9 +79,16 @@ class Crop(_Strict):
     y: float = Field(0.5, ge=0, le=1)
     zoom: float = Field(1.0, ge=1.0, le=4.0)
     path: list[tuple[float, float, float]] | None = None
+    bounds: tuple[float, float, float, float] = Field(
+        (0.0, 0.0, 1.0, 1.0),
+        description="[x0, y0, x1, y1]: the part of the source that is real footage (excludes letterbox "
+                    "bars, phone status bars). The crop never shows anything outside it.")
 
     @model_validator(mode="after")
     def _path(self):
+        x0, y0, x1, y1 = self.bounds
+        if not (0 <= x0 < x1 <= 1 and 0 <= y0 < y1 <= 1) or x1 - x0 < 0.05 or y1 - y0 < 0.05:
+            raise ValueError("crop.bounds must be [x0, y0, x1, y1] inside 0..1 with x0 < x1 and y0 < y1")
         if self.mode == "face_track" and not self.path:
             raise ValueError("crop.mode 'face_track' needs a 'path' of [t, x, y] keyframes")
         if self.path:

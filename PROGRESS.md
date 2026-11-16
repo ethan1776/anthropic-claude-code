@@ -138,4 +138,34 @@ The remaining bottleneck is the 3D LUT inside FFmpeg (about 70 fps on its own) c
 ### Speed
 Optical flow and motion blur cost time. On this 4-core machine at 1080x1920 30 fps, a 3.3 s clip takes about 9 s with plain effects, 20 s with slow-mo or blur throughout. Real edits use slow-mo and blur for only part of the length; Phase 5 measures a full edit against the 90 s target.
 
-### Next: Phase 4, video analysis and auto-reframe
+## Phase 4: Video analysis and auto-reframe. Done
+
+### What's done (`engine/mog/video/`)
+- **Shots:** PySceneDetect ContentDetector. Cuts are found within a frame on synthetic test clips; your clips split sensibly (e.g. the screenshot cut into clip 1 is its own shot).
+- **Faces** (`faces.py`):
+  - **Change from your spec:** OpenCV YuNet instead of MediaPipe. MediaPipe needs system OpenGL/EGL libraries even on CPU (it failed to load here); YuNet runs on the OpenCV we already ship.
+  - About 5 ms per frame. Gives boxes plus landmarks, used to estimate head turn (frontal vs profile).
+  - On your clips it found every face, including meme faces inserted into the hallway clip, and correctly none on the app-screenshot shot.
+- **Content area** (`content.py`). Trims what isn't footage:
+  - flat letterbox bars;
+  - frozen phone status and navigation bars (screen recordings);
+  - "blur bars" (reposts padded with a blurred copy of the video).
+  - Clean studio footage that is perfectly still on one side is NOT trimmed. Your podcast clip triggered that bug and it's fixed.
+  - The crop never shows anything outside this area.
+- **Face tracking** (`track.py`): Kalman filter plus backward smoother (looks ahead, so no lag), with an outlier gate and gap filling. On the shaky webcam clip it cuts jitter about 5x while following the full head movement.
+- **Scores per shot:**
+  - `face_score` (size, centring, presence);
+  - `frontal`;
+  - `motion_score` (median optical flow);
+  - `stare_score` (big frontal face, little motion);
+  - `action_score`;
+  - `quality` (sharpness, exposure, resolution, too-short penalty);
+  - suggested `exposure`: brightens under-exposed shots up to +1.5 stops, darkens at most 0.5.
+- **9:16 crop path** per shot: follows the face (placed in the upper third), or the motion when there's no face. Keyframes every 0.2 s.
+- **Caching:** analysis is cached per clip (about 1–13 s per clip on this machine).
+- **CLI:**
+  - `python -m mog scout CLIP --debug DIR`: shot table plus a debug image (content area, face, crop window).
+  - `python -m mog reframe CLIP --out x.mp4`: whole clip reframed to 9:16.
+- **145 tests.**
+
+### Next: Phase 5, edit planner and presets
