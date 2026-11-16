@@ -3,9 +3,12 @@
 Primary tracker: beat_this (a neural network from JKU Linz, state of the art for beats
 AND downbeats). It needs PyTorch and a model checkpoint download, so it is optional.
 
-Fallback: librosa's dynamic-programming beat tracker, plus our own downbeat finder.
-librosa does not estimate downbeats, so we pick which of the 4 possible "phases" of
-the beat grid is beat 1 (see `_pick_downbeat_phase`).
+Fallback: librosa's dynamic-programming beat tracker. It doesn't estimate downbeats;
+`downbeat_evidence` scores every beat for "this starts a bar", and `mog.audio.grid`
+picks the bar phase from it.
+
+The raw tracker output is then cleaned up in `mog.audio.grid` (snapped to the DAW tempo
+grid, with genuine jumps kept).
 """
 
 from __future__ import annotations
@@ -118,13 +121,8 @@ def _track_librosa(y: np.ndarray, sr: int, onset_env: np.ndarray, low_flux: np.n
     beats_f = _refine(frames, onset_env, radius=2)
     beats = beats_f / fps
 
-    # 5. Downbeats.
-    phase, phase_conf = _pick_downbeat_phase(beats, y, sr, low_flux, fps)
-    if phase_conf < 0.15:
-        warnings.append("Downbeat detection is uncertain for this track; cuts may land on beat 3 instead of 1.")
-    downbeats = beats[phase::BEATS_PER_BAR]
     bpm = 60.0 / float(np.median(np.diff(beats)))
-    return BeatResult(beats, downbeats, bpm, "librosa", warnings)
+    return BeatResult(beats, np.zeros(0), bpm, "librosa", warnings)
 
 
 def estimate_tempo(onset_env: np.ndarray, fps: float, lo: float = MIN_BPM, hi: float = MAX_BPM) -> float:
@@ -180,19 +178,18 @@ def _refine(frames: np.ndarray, env: np.ndarray, radius: int) -> np.ndarray:
     return out
 
 
-def _pick_downbeat_phase(beats: np.ndarray, y: np.ndarray, sr: int, low_flux: np.ndarray, fps: float):
-    """Decide which beat of every 4 is beat 1.
+def downbeat_evidence(beats: np.ndarray, y: np.ndarray, sr: int, low_flux: np.ndarray, fps: float) -> np.ndarray:
+    """Per-beat score (z-units) for "this beat starts a bar". Higher = more bar-like.
 
-    Evidence for "this beat starts a bar", summed per phase:
+    Evidence:
       * kick / 808 strength on the beat (phonk almost always hits beat 1)
       * harmonic change (chroma novelty): chords and 808 notes change on bar lines
       * loudness change (RMS novelty): sections start on bar lines, the drop above all
     Kick evidence alone can't separate beat 1 from beat 3 (both usually have a kick), which
     is why the harmonic and structural cues matter.
-    Returns (phase, confidence 0..1).
     """
     if len(beats) < 2 * BEATS_PER_BAR:
-        return 0, 0.0
+        return np.zeros(len(beats))
     frames = np.clip(np.round(beats * fps).astype(int), 0, len(low_flux) - 1)
     kick = _peak_near(low_flux, frames, 2)
 
@@ -221,13 +218,7 @@ def _pick_downbeat_phase(beats: np.ndarray, y: np.ndarray, sr: int, low_flux: np
         s = x.std()
         return (x - x.mean()) / s if s > 1e-9 else np.zeros_like(x)
 
-    evidence = z(kick) + 0.7 * z(chroma_nov) + 1.0 * z(rms_nov)
-    scores = np.array([evidence[p::BEATS_PER_BAR].mean() for p in range(BEATS_PER_BAR)])
-    order = np.argsort(scores)[::-1]
-    best, second = scores[order[0]], scores[order[1]]
-    spread = scores.max() - scores.min()
-    conf = float(np.clip((best - second) / (spread + 1e-9), 0.0, 1.0)) if spread > 0 else 0.0
-    return int(order[0]), conf
+    return z(kick) + 0.7 * z(chroma_nov) + 1.0 * z(rms_nov)
 
 
 def _peak_near(x: np.ndarray, frames: np.ndarray, radius: int) -> np.ndarray:

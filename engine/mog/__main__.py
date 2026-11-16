@@ -20,7 +20,7 @@ def _cmd_analyze(args: argparse.Namespace) -> None:
     from mog.audio import analyze_audio, pick_section
 
     t = time.time()
-    an = analyze_audio(args.track, tracker=args.tracker)
+    an = analyze_audio(args.track, tracker=args.tracker, offbeat=args.offbeat)
     sec = pick_section(an, args.length) if args.length else None
     payload = {"analysis": an.model_dump(), "section": sec.model_dump() if sec else None}
     if args.json:
@@ -38,7 +38,7 @@ def _cmd_debug(args: argparse.Namespace) -> None:
     out.mkdir(parents=True, exist_ok=True)
     stem = Path(args.track).stem
     t = time.time()
-    an = analyze_audio(args.track, tracker=args.tracker)
+    an = analyze_audio(args.track, tracker=args.tracker, offbeat=args.offbeat)
     sec = pick_section(an, args.length)
     elapsed = time.time() - t
 
@@ -89,6 +89,7 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--json", help="write the analysis to this JSON file")
     a.add_argument("--length", type=float, default=15, help="target edit length for the section picker (s)")
     a.add_argument("--tracker", choices=["auto", "beat_this", "librosa"], default="auto")
+    a.add_argument("--offbeat", action="store_true", help="shift the beat grid by half a beat")
     a.set_defaults(func=_cmd_analyze)
 
     d = sub.add_parser("debug", help="analyze + write debug PNG and click tracks")
@@ -96,6 +97,7 @@ def main(argv: list[str] | None = None) -> int:
     d.add_argument("--out", default="out/debug")
     d.add_argument("--length", type=float, default=15)
     d.add_argument("--tracker", choices=["auto", "beat_this", "librosa"], default="auto")
+    d.add_argument("--offbeat", action="store_true", help="shift the beat grid by half a beat")
     d.set_defaults(func=_cmd_debug)
 
     s = sub.add_parser("synth", help="generate a synthetic phonk-style test track")

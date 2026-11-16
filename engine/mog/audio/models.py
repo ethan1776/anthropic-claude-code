@@ -54,6 +54,7 @@ class AudioAnalysis(BaseModel):
     low_energy: Curve = Field(description="40-150 Hz RMS, smoothed, normalized 0..1")
     drop: Drop | None
     bars: list[Bar]
+    grid_breaks: list[float] = Field(default=[], description="Times where the beat grid jumps (spliced audio)")
     warnings: list[str] = []
 
     def onsets_of(self, kind: OnsetKind) -> list[Onset]:
