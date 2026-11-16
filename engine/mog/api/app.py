@@ -365,3 +365,159 @@ def files(key: str):
         raise MogError("Not found: file.")
     media = {".mp4": "video/mp4", ".m4a": "audio/mp4", ".jpg": "image/jpeg", ".json": "application/json"}
     return FileResponse(p, media_type=media.get(p.suffix.lower()), headers={"Cache-Control": "private, max-age=60"})
+
+
+# ----------------------------------------------------------------------------- editor
+
+def _project_inputs(pid: str):
+    """Audio analysis + clip analyses with project-relative sources (no recomputation)."""
+    from mog.audio.models import AudioAnalysis
+    from mog.video.models import VideoAnalysis
+
+    ps = store()
+    adata = ps.audio_analysis(pid)
+    if adata is None:
+        raise MogError("The song is still being analysed.")
+    clips = []
+    for c in ps.clips(pid):
+        a = ps.clip_analysis(pid, c.id)
+        if a is None:
+            raise MogError(f"{c.filename} is still being analysed.")
+        clips.append(VideoAnalysis.model_validate(a).model_copy(update={"source": f"clips/{c.id}/{c.filename}"}))
+    return AudioAnalysis.model_validate(adata["analysis"]), clips
+
+
+class EditOp(BaseModel):
+    op: str = Field(description="swap | speed | effect | nudge | text")
+    segment: str | None = None
+    source: str | None = None        # swap: clip source path, e.g. clips/<cid>/<file>
+    shot: int | None = None          # swap: shot index
+    mode: str | None = None          # speed: normal | slow | fast | ramp
+    effect: str | None = None        # effect: flash | zoom_punch | shake | rgb_split | motion_blur
+    on: bool = True
+    edge: str | None = None          # nudge: in | out
+    beats: int = 1                   # nudge: +-1
+    content: str | None = None       # text
+
+
+@app.post("/api/projects/{pid}/edits/{eid}/ops")
+def edit_op(pid: str, eid: str, body: EditOp) -> dict:
+    """Apply one editor action to the timeline and save it (no render; see /render)."""
+    from mog.planner import edit_ops as ops
+    from mog.planner.presets import load_preset
+
+    ps, s = store(), storage()
+    e = ps.get_edit(pid, eid)
+    raw = ps.timeline(pid, eid)
+    if raw is None:
+        raise MogError("This edit hasn't been generated yet.")
+    tl = Timeline.model_validate(raw)
+    audio, clips = _project_inputs(pid)
+    preset = load_preset(e.settings.preset)
+    need_seg = body.op in ("swap", "speed", "effect", "nudge")
+    if need_seg and not body.segment:
+        raise MogError("Pick a segment first.")
+    if body.op == "swap":
+        tl = ops.swap_shot(tl, body.segment, clips, body.source, body.shot)
+    elif body.op == "speed":
+        if body.mode not in ("normal", "slow", "fast", "ramp"):
+            raise MogError("Speed must be normal, slow, fast or ramp.")
+        tl = ops.set_speed(tl, body.segment, body.mode, clips, preset)
+    elif body.op == "effect":
+        if body.effect not in ("flash", "zoom_punch", "shake", "rgb_split", "motion_blur"):
+            raise MogError("Unknown effect.")
+        tl = ops.toggle_effect(tl, body.segment, body.effect, body.on, preset)
+    elif body.op == "nudge":
+        if body.edge not in ("in", "out") or body.beats not in (-1, 1):
+            raise MogError("Nudge a cut by one beat at a time (edge in/out, beats -1/+1).")
+        tl = ops.nudge_cut(tl, body.segment, body.edge, body.beats, audio, clips)
+    elif body.op == "text":
+        drop = None
+        if audio.drop is not None:
+            drop = audio.drop.t - tl.audio.start
+        tl = ops.set_text(tl, body.content, preset, drop)
+    else:
+        raise MogError("Unknown edit action.")
+    s.put_bytes(f"{ps.edit_key(pid, eid)}/timeline.json", tl.model_dump_json(indent=1).encode())
+    return {"timeline": tl.model_dump()}
+
+
+@app.post("/api/projects/{pid}/edits/{eid}/render")
+def rerender(pid: str, eid: str, _rl: None = Depends(rate_limit)) -> dict:
+    """Render a new preview from the (edited) timeline."""
+    ps = store()
+    e = ps.get_edit(pid, eid)
+    if ps.timeline(pid, eid) is None:
+        raise MogError("This edit hasn't been generated yet.")
+    e.status, e.error, e.job_id = "queued", None, _job_id()
+    ps.save_edit(pid, e)
+    _enqueue(jobs.render_preview_job, pid, eid, job_id=e.job_id)
+    return _edit_out(pid, ps.get_edit(pid, eid))
+
+
+@app.post("/api/projects/{pid}/edits/{eid}/reroll")
+def reroll(pid: str, eid: str, _rl: None = Depends(rate_limit)) -> dict:
+    """Same settings, new seed: a different edit."""
+    ps = store()
+    old = ps.get_edit(pid, eid)
+    settings_ = old.settings.model_copy(update={"seed": old.settings.seed + 1})
+    e = Edit(id=new_id("edt"), created_at=time.time(), settings=settings_, job_id=_job_id())
+    ps.save_edit(pid, e)
+    _enqueue(jobs.make_edit_job, pid, e.id, job_id=e.job_id)
+    return _edit_out(pid, ps.get_edit(pid, e.id))
+
+
+@app.get("/api/projects/{pid}/shots")
+def shots(pid: str) -> list[dict]:
+    """Every shot of every clip (for 'swap shot')."""
+    ps = store()
+    out = []
+    for c in ps.clips(pid):
+        a = ps.clip_analysis(pid, c.id)
+        if a is None:
+            continue
+        for sh in a["shots"]:
+            out.append({"source": f"clips/{c.id}/{c.filename}", "clip": c.filename, "shot": sh["index"],
+                        "start": sh["start"], "end": sh["end"], "stare": sh["stare_score"],
+                        "action": sh["action_score"], "thumb": url(f"{ps.base(pid)}/clips/{c.id}/thumb.jpg")})
+    return out
+
+
+@app.get("/api/projects/{pid}/looks")
+def looks(pid: str) -> list[dict]:
+    """Each preset's grade applied to a still from the user's own footage (for the style picker)."""
+    import subprocess
+
+    import cv2
+
+    from mog.color.grade_lut import bake
+    from mog.ffmpeg.audio_io import ffmpeg_bin
+    from mog.render.pixel_fx import Glow, Vignette
+
+    ps, s = store(), storage()
+    clips = ps.clips(pid)
+    thumb_key = next((f"{ps.base(pid)}/clips/{c.id}/thumb.jpg" for c in clips
+                      if s.exists(f"{ps.base(pid)}/clips/{c.id}/thumb.jpg")), None)
+    out = []
+    for p in list_presets():
+        key = f"{ps.base(pid)}/looks/{p.id}.jpg"
+        if thumb_key and not s.exists(key):
+            src = s.local_path(thumb_key)
+            dst = s.local_path(key)
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            img = cv2.imread(str(src))
+            h, w = img.shape[:2]
+            if p.grade.glow > 0:
+                img = Glow(w, h, p.grade.glow)(img)
+            if p.grade.vignette > 0:
+                img = Vignette(w, h, p.grade.vignette)(img)
+            tmp = dst.with_suffix(".pre.png")
+            cv2.imwrite(str(tmp), img)
+            lut = bake(p.grade)
+            vf = f"lut3d=file={lut}" if lut else "null"
+            subprocess.run([ffmpeg_bin(), "-v", "error", "-y", "-i", str(tmp), "-vf", vf, "-q:v", "4", str(dst)],
+                           capture_output=True)
+            tmp.unlink(missing_ok=True)
+        out.append({"id": p.id, "name": p.name, "description": p.description,
+                    "image": url(key) if s.exists(key) else None, "preview": f"/presets/{p.id}.mp4"})
+    return out

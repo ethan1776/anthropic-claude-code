@@ -593,8 +593,8 @@
           "type": "number"
         },
         "y": {
-          "default": 0.72,
-          "description": "Vertical position of the text centre (0 = top)",
+          "default": 0.7,
+          "description": "Vertical position of the text centre (0 = top). 0.70 stays above TikTok/Reels' own caption overlay at the bottom",
           "maximum": 1,
           "minimum": 0,
           "title": "Y",

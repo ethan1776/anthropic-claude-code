@@ -99,7 +99,7 @@ export interface TextOverlay {
   font: string;
   /** Text height as a fraction of output height */
   size: number;
-  /** Vertical position of the text centre (0 = top) */
+  /** Vertical position of the text centre (0 = top). 0.70 stays above TikTok/Reels' own caption overlay at the bottom */
   y: number;
   color: string;
   anim: "pop" | "fade" | "none";

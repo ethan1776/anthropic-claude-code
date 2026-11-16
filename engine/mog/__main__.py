@@ -193,6 +193,13 @@ def _cmd_make(args: argparse.Namespace) -> None:
         print(f"  ! {w}")
 
 
+def _cmd_previews(args: argparse.Namespace) -> None:
+    from mog.testing.previews import make_previews
+
+    for p in make_previews(Path(args.out)):
+        print(f"  {p}")
+
+
 def _cmd_presets(args: argparse.Namespace) -> None:
     from mog.planner.presets import list_presets
 
@@ -286,6 +293,10 @@ def main(argv: list[str] | None = None) -> int:
     mk.add_argument("--preview", action="store_true", help="fast half-resolution render")
     mk.add_argument("--plan-only", action="store_true", help="write the timeline JSON without rendering")
     mk.set_defaults(func=_cmd_make)
+
+    pv = sub.add_parser("previews", help="render the style-picker preview loops")
+    pv.add_argument("--out", default="../web/public/presets")
+    pv.set_defaults(func=_cmd_previews)
 
     ps = sub.add_parser("presets", help="list the style presets")
     ps.set_defaults(func=_cmd_presets)

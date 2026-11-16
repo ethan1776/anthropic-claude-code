@@ -197,7 +197,8 @@ class TextOverlay(_Strict):
     t_out: float
     font: str = "Cinzel"
     size: float = Field(0.06, gt=0, le=0.3, description="Text height as a fraction of output height")
-    y: float = Field(0.72, ge=0, le=1, description="Vertical position of the text centre (0 = top)")
+    y: float = Field(0.70, ge=0, le=1, description="Vertical position of the text centre (0 = top). 0.70 stays "
+                                                   "above TikTok/Reels' own caption overlay at the bottom")
     color: str = "#FFFFFF"
     anim: Literal["pop", "fade", "none"] = "pop"
 

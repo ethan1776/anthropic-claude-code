@@ -387,7 +387,7 @@ class Planner:
             t_in = self._snap_to_beat(min(t_in, max(self.D - self.bar, 0)))
             text.append({"content": self.o.text, "t_in": round(t_in, 4),
                          "t_out": round(min(self.D - 0.15, t_in + 3 * self.bar), 4), "font": self.p.text_font,
-                         "anim": self.p.text_anim, "y": 0.78, "size": 0.05})
+                         "anim": self.p.text_anim, "y": 0.70, "size": 0.05})
         tl = {
             "version": 1, "seed": self.o.seed,
             "output": {"width": self.o.width, "height": self.o.height, "fps": self.o.fps, "duration": round(self.D, 4)},
