@@ -1,0 +1,702 @@
+{
+  "$defs": {
+    "Audio": {
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "title": "File",
+          "type": "string"
+        },
+        "start": {
+          "default": 0.0,
+          "minimum": 0,
+          "title": "Start",
+          "type": "number"
+        },
+        "end": {
+          "title": "End",
+          "type": "number"
+        },
+        "fade_in": {
+          "default": 0.01,
+          "description": "Seconds. Default 10 ms avoids a click.",
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Fade In",
+          "type": "number"
+        },
+        "fade_out": {
+          "default": 0.4,
+          "maximum": 10,
+          "minimum": 0,
+          "title": "Fade Out",
+          "type": "number"
+        }
+      },
+      "required": [
+        "file",
+        "start",
+        "end",
+        "fade_in",
+        "fade_out"
+      ],
+      "title": "Audio",
+      "type": "object"
+    },
+    "Crop": {
+      "additionalProperties": false,
+      "description": "Which part of the source fills the 9:16 frame.\n\nx, y: centre of the crop window as a fraction of the source frame (0.5, 0.5 = centre).\nzoom: 1.0 = the smallest zoom that fills the output frame (no black bars); 2.0 = 2x closer.\npath: optional [[t, x, y], ...] keyframes (segment-local t), e.g. a face track. When\npresent it overrides x/y. The window is always clamped inside the source, so no black\nedges can appear.",
+      "properties": {
+        "mode": {
+          "default": "center",
+          "enum": [
+            "center",
+            "manual",
+            "face_track"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "x": {
+          "default": 0.5,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "default": 0.5,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Y",
+          "type": "number"
+        },
+        "zoom": {
+          "default": 1.0,
+          "maximum": 4.0,
+          "minimum": 1.0,
+          "title": "Zoom",
+          "type": "number"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "items": {
+                "maxItems": 3,
+                "minItems": 3,
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path"
+        }
+      },
+      "required": [
+        "mode",
+        "x",
+        "y",
+        "zoom",
+        "path"
+      ],
+      "title": "Crop",
+      "type": "object"
+    },
+    "Flash": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "flash",
+          "default": "flash",
+          "title": "Type",
+          "type": "string"
+        },
+        "t": {
+          "minimum": 0,
+          "title": "T",
+          "type": "number"
+        },
+        "frames": {
+          "default": 2,
+          "maximum": 6,
+          "minimum": 1,
+          "title": "Frames",
+          "type": "integer"
+        },
+        "color": {
+          "default": "#FFFFFF",
+          "title": "Color",
+          "type": "string"
+        },
+        "strength": {
+          "default": 1.0,
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Strength",
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "t",
+        "frames",
+        "color",
+        "strength"
+      ],
+      "title": "Flash",
+      "type": "object"
+    },
+    "Grade": {
+      "additionalProperties": false,
+      "properties": {
+        "lut": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Built-in LUT name (e.g. 'bw_crush.cube') or a path to a .cube file",
+          "title": "Lut"
+        },
+        "lut_strength": {
+          "default": 1.0,
+          "description": "Mix between the original (0) and the LUT (1)",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Lut Strength",
+          "type": "number"
+        },
+        "contrast": {
+          "default": 1.0,
+          "maximum": 2.5,
+          "minimum": 0.5,
+          "title": "Contrast",
+          "type": "number"
+        },
+        "brightness": {
+          "default": 0.0,
+          "maximum": 0.3,
+          "minimum": -0.3,
+          "title": "Brightness",
+          "type": "number"
+        },
+        "gamma": {
+          "default": 1.0,
+          "maximum": 2.0,
+          "minimum": 0.5,
+          "title": "Gamma",
+          "type": "number"
+        },
+        "saturation": {
+          "default": 1.0,
+          "description": "0 = black & white",
+          "maximum": 3.0,
+          "minimum": 0.0,
+          "title": "Saturation",
+          "type": "number"
+        },
+        "black_crush": {
+          "default": 0.0,
+          "description": "Darkest X of the range goes to pure black",
+          "maximum": 0.4,
+          "minimum": 0.0,
+          "title": "Black Crush",
+          "type": "number"
+        },
+        "grain": {
+          "default": 0.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Grain",
+          "type": "number"
+        },
+        "vignette": {
+          "default": 0.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Vignette",
+          "type": "number"
+        },
+        "glow": {
+          "default": 0.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Glow",
+          "type": "number"
+        }
+      },
+      "required": [
+        "lut",
+        "lut_strength",
+        "contrast",
+        "brightness",
+        "gamma",
+        "saturation",
+        "black_crush",
+        "grain",
+        "vignette",
+        "glow"
+      ],
+      "title": "Grade",
+      "type": "object"
+    },
+    "MotionBlur": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "motion_blur",
+          "default": "motion_blur",
+          "title": "Type",
+          "type": "string"
+        },
+        "t_in": {
+          "minimum": 0,
+          "title": "T In",
+          "type": "number"
+        },
+        "t_out": {
+          "title": "T Out",
+          "type": "number"
+        },
+        "strength": {
+          "default": 0.6,
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Strength",
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "t_in",
+        "t_out",
+        "strength"
+      ],
+      "title": "MotionBlur",
+      "type": "object"
+    },
+    "Output": {
+      "additionalProperties": false,
+      "properties": {
+        "width": {
+          "default": 1080,
+          "maximum": 4096,
+          "minimum": 16,
+          "multipleOf": 2,
+          "title": "Width",
+          "type": "integer"
+        },
+        "height": {
+          "default": 1920,
+          "maximum": 4096,
+          "minimum": 16,
+          "multipleOf": 2,
+          "title": "Height",
+          "type": "integer"
+        },
+        "fps": {
+          "default": 60,
+          "enum": [
+            24,
+            25,
+            30,
+            50,
+            60
+          ],
+          "title": "Fps",
+          "type": "integer"
+        },
+        "duration": {
+          "exclusiveMinimum": 0,
+          "maximum": 600,
+          "title": "Duration",
+          "type": "number"
+        }
+      },
+      "required": [
+        "width",
+        "height",
+        "fps",
+        "duration"
+      ],
+      "title": "Output",
+      "type": "object"
+    },
+    "RgbSplit": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "rgb_split",
+          "default": "rgb_split",
+          "title": "Type",
+          "type": "string"
+        },
+        "t": {
+          "minimum": 0,
+          "title": "T",
+          "type": "number"
+        },
+        "frames": {
+          "default": 3,
+          "maximum": 12,
+          "minimum": 1,
+          "title": "Frames",
+          "type": "integer"
+        },
+        "offset": {
+          "default": 8,
+          "description": "Channel shift in pixels at 1080 px width",
+          "exclusiveMinimum": 0,
+          "maximum": 60,
+          "title": "Offset",
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "t",
+        "frames",
+        "offset"
+      ],
+      "title": "RgbSplit",
+      "type": "object"
+    },
+    "Segment": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "source": {
+          "description": "Clip file name, relative to the project media folder",
+          "title": "Source",
+          "type": "string"
+        },
+        "src_in": {
+          "minimum": 0,
+          "title": "Src In",
+          "type": "number"
+        },
+        "timeline_in": {
+          "minimum": 0,
+          "title": "Timeline In",
+          "type": "number"
+        },
+        "timeline_out": {
+          "title": "Timeline Out",
+          "type": "number"
+        },
+        "speed_curve": {
+          "description": "[[t, speed], ...]: playback speed keyframes (segment-local t). 1 = normal, 0.3 = slow-mo.",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Speed Curve",
+          "type": "array"
+        },
+        "ease": {
+          "default": "smoothstep",
+          "enum": [
+            "linear",
+            "smoothstep",
+            "cubic"
+          ],
+          "title": "Ease",
+          "type": "string"
+        },
+        "crop": {
+          "$ref": "#/$defs/Crop"
+        },
+        "effects": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "flash": "#/$defs/Flash",
+                "motion_blur": "#/$defs/MotionBlur",
+                "rgb_split": "#/$defs/RgbSplit",
+                "shake": "#/$defs/Shake",
+                "zoom_punch": "#/$defs/ZoomPunch"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ZoomPunch"
+              },
+              {
+                "$ref": "#/$defs/Shake"
+              },
+              {
+                "$ref": "#/$defs/Flash"
+              },
+              {
+                "$ref": "#/$defs/RgbSplit"
+              },
+              {
+                "$ref": "#/$defs/MotionBlur"
+              }
+            ]
+          },
+          "title": "Effects",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "src_in",
+        "timeline_in",
+        "timeline_out",
+        "speed_curve",
+        "ease",
+        "crop",
+        "effects"
+      ],
+      "title": "Segment",
+      "type": "object"
+    },
+    "Shake": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "shake",
+          "default": "shake",
+          "title": "Type",
+          "type": "string"
+        },
+        "t": {
+          "minimum": 0,
+          "title": "T",
+          "type": "number"
+        },
+        "intensity": {
+          "default": 18,
+          "description": "Peak offset in pixels at 1080 px width",
+          "exclusiveMinimum": 0,
+          "maximum": 200,
+          "title": "Intensity",
+          "type": "number"
+        },
+        "decay": {
+          "default": 0.35,
+          "exclusiveMinimum": 0,
+          "maximum": 3,
+          "title": "Decay",
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "t",
+        "intensity",
+        "decay"
+      ],
+      "title": "Shake",
+      "type": "object"
+    },
+    "TextOverlay": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Content",
+          "type": "string"
+        },
+        "t_in": {
+          "minimum": 0,
+          "title": "T In",
+          "type": "number"
+        },
+        "t_out": {
+          "title": "T Out",
+          "type": "number"
+        },
+        "font": {
+          "default": "Cinzel",
+          "title": "Font",
+          "type": "string"
+        },
+        "size": {
+          "default": 0.06,
+          "description": "Text height as a fraction of output height",
+          "exclusiveMinimum": 0,
+          "maximum": 0.3,
+          "title": "Size",
+          "type": "number"
+        },
+        "y": {
+          "default": 0.72,
+          "description": "Vertical position of the text centre (0 = top)",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Y",
+          "type": "number"
+        },
+        "color": {
+          "default": "#FFFFFF",
+          "title": "Color",
+          "type": "string"
+        },
+        "anim": {
+          "default": "pop",
+          "enum": [
+            "pop",
+            "fade",
+            "none"
+          ],
+          "title": "Anim",
+          "type": "string"
+        }
+      },
+      "required": [
+        "content",
+        "t_in",
+        "t_out",
+        "font",
+        "size",
+        "y",
+        "color",
+        "anim"
+      ],
+      "title": "TextOverlay",
+      "type": "object"
+    },
+    "ZoomPunch": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "zoom_punch",
+          "default": "zoom_punch",
+          "title": "Type",
+          "type": "string"
+        },
+        "t": {
+          "minimum": 0,
+          "title": "T",
+          "type": "number"
+        },
+        "strength": {
+          "default": 1.2,
+          "description": "Peak scale, e.g. 1.2 = 120%",
+          "maximum": 2.0,
+          "minimum": 1.0,
+          "title": "Strength",
+          "type": "number"
+        },
+        "decay": {
+          "default": 0.3,
+          "exclusiveMinimum": 0,
+          "maximum": 3,
+          "title": "Decay",
+          "type": "number"
+        },
+        "anchor": {
+          "default": "center",
+          "enum": [
+            "center",
+            "face"
+          ],
+          "title": "Anchor",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "t",
+        "strength",
+        "decay",
+        "anchor"
+      ],
+      "title": "ZoomPunch",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": 1,
+      "default": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "seed": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Planner seed that produced this timeline (for re-roll)",
+      "title": "Seed"
+    },
+    "output": {
+      "$ref": "#/$defs/Output"
+    },
+    "audio": {
+      "$ref": "#/$defs/Audio"
+    },
+    "grade": {
+      "$ref": "#/$defs/Grade"
+    },
+    "segments": {
+      "items": {
+        "$ref": "#/$defs/Segment"
+      },
+      "minItems": 1,
+      "title": "Segments",
+      "type": "array"
+    },
+    "text": {
+      "items": {
+        "$ref": "#/$defs/TextOverlay"
+      },
+      "title": "Text",
+      "type": "array"
+    }
+  },
+  "required": [
+    "version",
+    "seed",
+    "output",
+    "audio",
+    "grade",
+    "segments",
+    "text"
+  ],
+  "title": "Timeline",
+  "type": "object"
+}

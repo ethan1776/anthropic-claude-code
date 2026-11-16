@@ -1,3 +1,6 @@
+import os
+import tempfile
+
 import numpy as np
 import pytest
 
@@ -12,6 +15,9 @@ FRAME_60 = 1 / 60
 TRACKS = [(108, 0.6), (130, 1.1), (145, 0.37), (160, 0.05)]
 
 _cache: dict = {}
+
+# Keep the ingest / LUT cache out of the user's home during tests
+os.environ.setdefault("MOG_CACHE", tempfile.mkdtemp(prefix="mog-test-cache-"))
 
 
 def analyzed(bpm: float, offset: float, **kw):

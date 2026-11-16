@@ -4,9 +4,9 @@ Upload clips and a phonk track, pick a style, and get a beat-synced 9:16 edit.
 
 > Only use clips and music you have the rights to post.
 
-**Status:** Phase 1 of 8 (audio analysis, CLI only). See [PROGRESS.md](PROGRESS.md).
+**Status:** Phases 1–2 of 8 done (audio analysis, basic renderer; CLI only). See [PROGRESS.md](PROGRESS.md).
 
-## Setup (Phase 1)
+## Setup
 
 You need Python 3.11+ and FFmpeg.
 
@@ -44,3 +44,26 @@ python -m pytest
 | `<name>.analysis.json` | Everything the planner will use. |
 
 See `samples/phase1/` for example output.
+
+## Render a timeline (Phase 2)
+
+A timeline is a JSON file describing the edit: which clip plays when, at what speed and
+crop, plus the colour grade and the music section. The format is defined in
+`engine/mog/timeline/models.py`; TypeScript types for the web app are in `web/lib/timeline.ts`.
+
+```bash
+cd engine
+# Demo media: 4 synthetic clips + a synthetic phonk track
+python -m mog testclips out/media
+python -m mog synth out/media/phonk145.wav --bpm 145
+
+# Render the hand-written sample timeline
+python -m mog render ../samples/phase2/sample_timeline.json --media out/media --out out/sample.mp4
+# Quick half-resolution preview
+python -m mog render ../samples/phase2/sample_timeline.json --media out/media --out out/preview.mp4 --preview
+
+# After changing the timeline models, regenerate the JSON Schema + TypeScript types
+python -m mog schema
+```
+
+Converted clips and generated LUTs are cached in `~/.cache/mog` (set `MOG_CACHE` to move it).

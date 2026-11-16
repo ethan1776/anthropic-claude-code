@@ -1,6 +1,6 @@
 # Progress
 
-## Phase 1: Audio brain (CLI). Built; acceptance test in progress (your 5 tracks)
+## Phase 1: Audio brain (CLI). Done, accepted on your 5 tracks
 
 ### What's done
 - `analyze_audio(path) -> AudioAnalysis` (`engine/mog/audio/`). It returns:
@@ -54,5 +54,52 @@ Fixes made from these tracks:
 - **4/4 time is assumed.** That's fine for phonk.
 - **Half-time-feel tracks are counted at double speed.** For example, a 75 BPM track is reported as 150 BPM, which is what cutting on every beat needs.
 
-### Next: Phase 2, basic renderer
-Timeline JSON schema (Pydantic + TypeScript types); renderer for cuts, constant speed, grade, grain and vignette; a hand-written sample timeline rendered to 1080x1920 MP4.
+## Phase 2: Basic renderer (CLI). Done
+
+### What's done
+- **Timeline schema** (`engine/mog/timeline/models.py`):
+  - Pydantic models with strict validation. Unknown fields, gaps or overlaps between segments, bad speeds, effects after a segment ends, and audio shorter than the video are all rejected with clear messages.
+  - Exported to JSON Schema and TypeScript (`web/lib/timeline.ts`, type-checked with `tsc --strict`). A test fails if they go stale.
+  - Times inside a segment (speed keyframes, effects, crop paths) are segment-local, so segments can be moved in the editor.
+- **Ingest** (`video/ingest.py`). Each clip is converted once, then cached:
+  - constant frame rate at the clip's own standard rate;
+  - phone rotation applied;
+  - iPhone HDR (HLG / HDR10) tone-mapped to Rec.709;
+  - shrunk only when much larger than needed;
+  - a keyframe every second for fast seeking.
+- **Frame-exact reading** (`ffmpeg/frames.py`). Verified with barcode test clips at 24, 30 and 60 fps and rotated: every frame read is exactly the frame asked for.
+- **Renderer** (`render/renderer.py`):
+  - cuts (land on the nearest frame), speed curves with linear / smoothstep / cubic easing, 9:16 crop with zoom and moving crop paths;
+  - grade: LUT + strength, contrast, brightness, gamma, saturation, black crush, glow, vignette, film grain;
+  - audio section with fade-in and fade-out;
+  - progress reporting;
+  - output checked after encoding (size, frame count, audio). A failed render leaves no half-written file.
+- **Colour:**
+  - 5 built-in LUTs, generated from maths so there's nothing to license: `bw_crush`, `teal_cold`, `velocity_punch`, `night_drift`, `clean_film`.
+  - Users' own `.cube` files also work.
+  - The whole per-pixel grade is baked into one LUT for speed.
+- **Output:**
+  - H.264 High, yuv420p, Rec.709 tags, 30 or 60 fps CFR, about 15.6 Mbps, AAC 320 kbps 48 kHz, `+faststart`.
+  - Preview mode: 540x960, fast preset.
+- **No black edges, by construction:** the crop window is clamped inside the source (tested with 1,200 random crops and zooms).
+- **Same timeline, same output:** two renders produce byte-identical frames (tested).
+- **130 tests** in about 21 s.
+
+### Sample
+`samples/phase2/sample_timeline.json` uses 4 synthetic clips (landscape 30 fps, vertical 60 fps, 4:3 24 fps, rotated 29.97 fps phone clip) and the synthetic phonk track. `samples/phase2/sample_frames.png` shows frames from the render.
+
+### Speed (this cloud machine: 4 CPU cores, no GPU)
+| Render | Time for the 14.9 s sample |
+|---|---|
+| Export, 1080x1920 @ 60 fps | 61 s (was 93 s before optimising) |
+| Preview, 540x960 @ 60 fps | 14 s |
+
+The remaining bottleneck is the 3D LUT inside FFmpeg (about 70 fps on its own) competing with the x264 encoder for 4 cores. Phase 3's effects and slow-motion interpolation will add cost. If the 90 s target gets tight, the planned fix is rendering chunks of the timeline in parallel and joining them.
+
+### Known limitations
+- Slow motion currently repeats frames (choppy). Smooth interpolated slow-mo is Phase 3.
+- Per-segment effects (zoom punch, shake, flash, RGB split, motion blur) and text overlays are in the schema but rejected by the renderer until Phase 3.
+- The demo clips are synthetic test patterns. Judging the grades properly needs real footage.
+
+### Next: Phase 3, effects
+Smooth slow-mo (minterpolate on CPU, RIFE when there's a GPU), zoom punch, shake, flash, motion blur, RGB split and text, with one demo video per effect.

@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "seed": null,
+  "output": { "width": 1080, "height": 1920, "fps": 60, "duration": 14.9015 },
+  "audio": { "file": "phonk145.wav", "start": 10.298, "end": 25.1995, "fade_in": 0.01, "fade_out": 0.4 },
+  "grade": {
+    "lut": "teal_cold.cube", "lut_strength": 0.9,
+    "contrast": 1.15, "brightness": 0.0, "gamma": 1.0, "saturation": 0.85,
+    "black_crush": 0.05, "grain": 0.3, "vignette": 0.45, "glow": 0.15
+  },
+  "segments": [
+    { "id": "s1",  "source": "street.mp4", "src_in": 0.5, "timeline_in": 0.0,    "timeline_out": 1.6603 },
+    { "id": "s2",  "source": "phone.mov",  "src_in": 0.5, "timeline_in": 1.6603, "timeline_out": 3.3147 },
+    { "id": "s3",  "source": "neon.mp4",   "src_in": 1.0, "timeline_in": 3.3147, "timeline_out": 4.9691,
+      "speed_curve": [[0.0, 0.5]] },
+    { "id": "s4",  "source": "cells.mp4",  "src_in": 0.0, "timeline_in": 4.9691, "timeline_out": 5.7992,
+      "speed_curve": [[0.0, 1.5]], "crop": { "mode": "manual", "x": 0.3, "y": 0.5, "zoom": 1.3 } },
+    { "id": "s5",  "source": "street.mp4", "src_in": 3.0, "timeline_in": 5.7992, "timeline_out": 6.6235,
+      "speed_curve": [[0.0, 2.0]], "crop": { "mode": "manual", "x": 0.8, "y": 0.5, "zoom": 1.2 } },
+    { "id": "s6",  "source": "phone.mov",  "src_in": 2.5, "timeline_in": 6.6235, "timeline_out": 7.0357 },
+    { "id": "s7",  "source": "neon.mp4",   "src_in": 4.0, "timeline_in": 7.0357, "timeline_out": 7.4537 },
+    { "id": "s8",  "source": "cells.mp4",  "src_in": 2.0, "timeline_in": 7.4537, "timeline_out": 7.8658,
+      "crop": { "mode": "manual", "x": 0.5, "y": 0.5, "zoom": 2.0 } },
+    { "id": "s9",  "source": "street.mp4", "src_in": 5.0, "timeline_in": 7.8658, "timeline_out": 8.278 },
+    { "id": "s10", "source": "street.mp4", "src_in": 1.5, "timeline_in": 8.278,  "timeline_out": 9.9324,
+      "speed_curve": [[0.0, 0.8]],
+      "crop": { "mode": "face_track", "path": [[0.0, 0.15, 0.5], [1.65, 0.85, 0.5]] } },
+    { "id": "s11", "source": "phone.mov",  "src_in": 0.2, "timeline_in": 9.9324, "timeline_out": 11.5868,
+      "speed_curve": [[0.0, 2.0], [0.4, 2.0], [0.45, 0.5], [1.65, 0.5]], "ease": "cubic" },
+    { "id": "s12", "source": "cells.mp4",  "src_in": 3.0, "timeline_in": 11.5868, "timeline_out": 12.4169 },
+    { "id": "s13", "source": "neon.mp4",   "src_in": 5.5, "timeline_in": 12.4169, "timeline_out": 13.247 },
+    { "id": "s14", "source": "street.mp4", "src_in": 6.0, "timeline_in": 13.247,  "timeline_out": 14.9015 }
+  ],
+  "text": []
+}
