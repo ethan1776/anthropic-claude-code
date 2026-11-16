@@ -1,14 +1,9 @@
 /** @type {import('next').NextConfig} */
-const API_URL = process.env.API_URL || "http://localhost:8000";
-
+// The browser talks to /api on this server; app/api/[...path]/route.ts forwards it to the
+// Python API at API_URL (read at request time).
 const nextConfig = {
   output: "standalone",
   reactStrictMode: true,
-  // The browser talks to /api on this server; Next forwards it to the Python API.
-  async rewrites() {
-    return [{ source: "/api/:path*", destination: `${API_URL}/api/:path*` }];
-  },
-  experimental: { proxyTimeout: 10 * 60 * 1000 },
 };
 
 export default nextConfig;

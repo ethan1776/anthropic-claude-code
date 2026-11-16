@@ -213,4 +213,27 @@ Optical flow and motion blur cost time. On this 4-core machine at 1080x1920 30 f
 - **Verified for real** (Redis + API + worker in Docker, async jobs, your clips and track): uploads return instantly; analysis takes 2–37 s per clip; preview ready 19 s after you click Generate; full-quality export 58 s.
 - **169 tests** (API tests use an in-memory Redis with jobs run inline).
 
-### Next: Phase 7, frontend
+## Phase 7: Frontend. Done
+
+### What's done (`web/`, Next.js 14 App Router + TypeScript + Tailwind, dark, mobile-first)
+- **Home:** big "Create edit" button and a grid of recent projects.
+- **Upload:** tap or drag-and-drop clips (MP4/MOV, up to 10, 2 GB) and a song (MP3/WAV/M4A, or a video to use its sound). Per-file upload progress, then analysis progress, thumbnails, low-resolution warnings, and the rights notice.
+- **Song:** waveform with beat ticks, bar lines and the drop. The auto-picked section can be dragged and snaps to bar lines. Length chips (10/15/20/30 s), "play section", and "includes the drop" feedback.
+- **Style:** a card per preset showing *your own footage* in that look, plus a small looping clip of the style's motion. Intensity slider and optional caption.
+- **Generate:** progress bar with stage names ("Finding the beat… Scouting shots… Directing… Rendering…"), with retry on failure.
+- **Editor:**
+  - preview player, and a timeline strip with beat ticks and the drop;
+  - tap a cut to swap the shot (auto or pick from thumbnails), change speed (normal / slow / fast / fast→slow), toggle effects, or move the cut one beat either way;
+  - caption field, Update preview, Re-roll (new seed), Export.
+- **Export:** 30/60 fps, Fast/High, progress, Download, Share (the phone's share sheet), and "Save project" (otherwise deleted after 24 h).
+- Editor actions run in Python (`planner/edit_ops.py`, 9 tests), so footage, crop and beat-grid rules stay in one place.
+- `/api/*` is forwarded to the Python API by a streaming route handler, so big uploads and video seeking pass straight through.
+- `web/Dockerfile`: Next standalone build on node:20-slim.
+- **Browser end-to-end test** (`web/e2e/smoke.mjs`, Playwright, phone viewport, real uploads): create, upload, song, style, generate, edit (slow-mo + shake), re-render, export, download. **Passes against the full Docker Compose stack in 131 s.**
+- **Fixed from screenshots:**
+  - a fixed footer could be covered by content;
+  - a CLI-only hint showed in the UI;
+  - the style cards now lead with your footage;
+  - the caption moved to 70% height, above TikTok/Reels' own bottom overlay.
+
+### Next: Phase 8, polish
