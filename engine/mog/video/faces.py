@@ -8,14 +8,14 @@ libraries even on CPU, while YuNet runs on the OpenCV we already ship. YuNet ret
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 
 import cv2
 import numpy as np
 
 from mog.errors import MogError
+from mog.paths import MODELS
 
-MODEL = Path(__file__).resolve().parents[3] / "assets" / "models" / "face_detection_yunet_2023mar.onnx"
+MODEL = MODELS / "face_detection_yunet_2023mar.onnx"
 DETECT_MAX_DIM = 480
 
 

@@ -1,0 +1,8 @@
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+engine/out
+data
+web/node_modules
+web/.next
+.git

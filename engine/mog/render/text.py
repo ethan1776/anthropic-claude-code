@@ -13,10 +13,11 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from mog.errors import MogError
+from mog.paths import FONTS
 from mog.ffmpeg.filtergraph import F, Graph
 from mog.timeline.models import TextOverlay
 
-FONTS_DIR = Path(__file__).resolve().parents[3] / "assets" / "fonts"
+FONTS_DIR = FONTS
 FONT_FILES = {"cinzel": "Cinzel.ttf", "anton": "Anton.ttf", "inter": "Inter.ttf"}
 POP_S = 0.16  # seconds for the pop to settle
 

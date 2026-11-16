@@ -1,0 +1,60 @@
+# One command:  docker compose up --build      then open http://localhost:3000
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  api:
+    image: mog-engine:latest
+    build:
+      context: .
+      dockerfile: engine/Dockerfile
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      MOG_CORS_ORIGINS: http://localhost:3000
+    volumes:
+      - data:/data
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 10s
+      retries: 10
+
+  worker:
+    image: mog-engine:latest   # same image as the API (built once)
+    restart: unless-stopped
+    command: ["rq", "worker", "--url", "redis://redis:6379/0", "mog"]
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: web
+    restart: unless-stopped
+    environment:
+      API_URL: http://api:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  data:
+  redis:

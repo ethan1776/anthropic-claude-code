@@ -194,4 +194,23 @@ Optical flow and motion blur cost time. On this 4-core machine at 1080x1920 30 f
 - **Speed fixes** (motion blur uses real frames when available; flow maths at low resolution). A 15 s edit from 3 clips went from 145 s to 65 s. With clips already analysed, each 15 s edit takes 46–56 s on this 4-core machine; a first run adds clip analysis (about 15–100 s depending on clip length).
 - **167 tests.**
 
-### Next: Phase 6, API, job queue and Docker Compose
+## Phase 6: API, job queue and Docker Compose. Done
+
+### What's done
+- **Storage interface** (`mog/storage.py`): `LocalStorage` now. S3 or R2 can be added by implementing the same 9 methods (the engine asks for a local path per key, so a cloud backend downloads to a cache first).
+- **Projects** (`mog/projects.py`): plain JSON files per project, clip, audio and edit. The API and the worker never write the same file, so there's no locking.
+- **API** (`mog/api/app.py`, FastAPI): projects, clip and song uploads, audio analysis (beats, drop, sections, waveform for the UI), presets, generate edit, edit the timeline and re-render, export (30/60 fps, Fast/High), job status (stage and %), file serving with HTTP range requests (video seeking), save and delete project, health.
+  - Clear error messages, never tracebacks.
+  - Upload limits: 10 clips, 2 GB total, file types.
+  - Rate limiting: renders per IP per hour, in Redis.
+  - `../` paths blocked.
+  - Unsaved projects deleted after 24 h (hourly cleanup, plus stale cache files).
+- **Worker** (`mog/worker/jobs.py`, RQ): analyse song (plus browser playback copy), scout clip (plus thumbnail), generate (plan + preview render), re-render after edits, export. Each job reports `{stage, progress}`.
+- **Bug found and fixed:** a race where the API could overwrite a job's "done" status (job ids are now chosen before enqueueing).
+- **Docker:**
+  - `engine/Dockerfile`, on Ubuntu 24.04 (FFmpeg 6.1 + Python 3.12, the versions everything is tested on). Runs as a non-root user. Optional `--build-arg INSTALL_BEATS=1` adds the `beat_this` ML tracker.
+  - `docker-compose.yml`: redis, api, worker, web.
+- **Verified for real** (Redis + API + worker in Docker, async jobs, your clips and track): uploads return instantly; analysis takes 2–37 s per clip; preview ready 19 s after you click Generate; full-quality export 58 s.
+- **169 tests** (API tests use an in-memory Redis with jobs run inline).
+
+### Next: Phase 7, frontend

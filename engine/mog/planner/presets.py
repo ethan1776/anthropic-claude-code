@@ -10,9 +10,10 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from mog.errors import MogError
+from mog.paths import PRESETS
 from mog.timeline.models import Grade
 
-PRESETS_DIR = Path(__file__).resolve().parents[3] / "presets"
+PRESETS_DIR = PRESETS
 
 
 class _Strict(BaseModel):
