@@ -1,0 +1,15 @@
+{
+  "id": "mog",
+  "name": "Mog",
+  "description": "High-contrast cold teal grade, face-centred zoom punches, a long stare after the drop.",
+  "grade": { "lut": "teal_cold.cube", "contrast": 1.2, "saturation": 0.9, "black_crush": 0.04,
+             "grain": 0.25, "vignette": 0.45, "glow": 0.1 },
+  "cuts": { "pre_drop": "bar", "post_drop": "beat", "calm_post_drop": "half_bar" },
+  "speed": { "pre_drop": 1.0, "build_ramp": 2.2, "stare_speed": 0.3, "stare_bars": 2,
+             "velocity_ramps": true, "ramp_every_bars": 2, "ramp_fast": 2.5, "ramp_slow": 0.35 },
+  "effects": { "drop_flash_frames": 2, "drop_punch": 1.3, "drop_shake": 26,
+               "punch_on": "kick", "punch_strength": 1.18, "punch_prob": 0.5,
+               "flash_on_cuts": 0.18, "flash_frames": 2, "shake_on_bass": 0.0,
+               "rgb_on": "none", "motion_blur": 0.5 },
+  "text_font": "Cinzel"
+}

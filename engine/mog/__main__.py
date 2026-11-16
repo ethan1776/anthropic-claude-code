@@ -8,6 +8,9 @@
     python -m mog schema  [--json OUT.schema.json] [--ts OUT.ts]
     python -m mog scout   CLIP [--debug DIR]
     python -m mog reframe CLIP --out OUT.mp4 [--max 15] [--preview]
+    python -m mog make    --clips A.mp4 B.mov ... --audio TRACK.mp3 --preset mog --length 15
+                          [--seed 1] [--intensity 0.6] [--text "..."] [--fps 30] [--out edit.mp4]
+    python -m mog presets
 """
 
 from __future__ import annotations
@@ -159,6 +162,44 @@ def _cmd_reframe(args: argparse.Namespace) -> None:
     print(f"wrote {res.path} ({len(tl.segments)} shots, {res.frames / res.fps:.1f}s) in {res.seconds:.1f}s")
 
 
+def _cmd_make(args: argparse.Namespace) -> None:
+    from mog.pipeline import make_edit
+    from mog.planner.planner import describe
+
+    last = [""]
+
+    def progress(stage: str, frac: float) -> None:
+        line = f"\r  {stage:<18} {frac * 100:5.1f}%"
+        if line != last[0]:
+            print(line, end="", flush=True)
+            last[0] = line
+
+    res = make_edit(args.clips, args.audio, preset=args.preset, length=args.length, seed=args.seed,
+                    intensity=args.intensity, text=args.text, fps=args.fps,
+                    out=None if args.plan_only else args.out, preview=args.preview,
+                    section_start=args.start, progress=progress)
+    print()
+    tl_path = Path(args.timeline_out or (Path(args.out).with_suffix(".timeline.json")))
+    tl_path.parent.mkdir(parents=True, exist_ok=True)
+    tl_path.write_text(res.timeline.model_dump_json(indent=1))
+    sec = res.section
+    print(f"  section {sec.start:.2f}-{sec.end:.2f}s of the song, drop at {sec.drop}, "
+          f"{len(res.timeline.segments)} cuts, preset {args.preset}, seed {args.seed}")
+    print(describe(res.timeline))
+    print(f"  timeline: {tl_path}")
+    if res.render:
+        print(f"  video:    {res.render.path}  ({res.render.seconds:.1f}s render, {res.seconds:.1f}s total)")
+    for w in res.warnings:
+        print(f"  ! {w}")
+
+
+def _cmd_presets(args: argparse.Namespace) -> None:
+    from mog.planner.presets import list_presets
+
+    for p in list_presets():
+        print(f"  {p.id:<12} {p.name:<12} {p.description}")
+
+
 def _summary(an, sec, elapsed: float) -> None:
     kinds = {k: len(an.onsets_of(k)) for k in ("kick", "snare", "hihat", "cowbell")}
     print(f"\n{an.source}  ({an.duration:.1f}s, analyzed in {elapsed:.1f}s)")
@@ -229,6 +270,25 @@ def main(argv: list[str] | None = None) -> int:
     rf.add_argument("--max", type=float, default=15.0, help="max seconds to render")
     rf.add_argument("--preview", action="store_true")
     rf.set_defaults(func=_cmd_reframe)
+
+    mk = sub.add_parser("make", help="make a full edit: clips + music + style -> MP4")
+    mk.add_argument("--clips", nargs="+", required=True)
+    mk.add_argument("--audio", required=True)
+    mk.add_argument("--preset", default="mog")
+    mk.add_argument("--length", type=float, default=15)
+    mk.add_argument("--start", type=float, help="song section start (s); default: auto around the drop")
+    mk.add_argument("--seed", type=int, default=1, help="change to re-roll a different edit")
+    mk.add_argument("--intensity", type=float, default=0.6, help="0..1 effect density/strength")
+    mk.add_argument("--text", help="optional caption that pops in after the drop")
+    mk.add_argument("--fps", type=int, default=30, choices=[30, 60])
+    mk.add_argument("--out", default="out/edit.mp4")
+    mk.add_argument("--timeline-out")
+    mk.add_argument("--preview", action="store_true", help="fast half-resolution render")
+    mk.add_argument("--plan-only", action="store_true", help="write the timeline JSON without rendering")
+    mk.set_defaults(func=_cmd_make)
+
+    ps = sub.add_parser("presets", help="list the style presets")
+    ps.set_defaults(func=_cmd_presets)
 
     args = p.parse_args(argv)
     try:

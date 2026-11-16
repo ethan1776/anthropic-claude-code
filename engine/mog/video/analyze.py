@@ -26,7 +26,7 @@ from mog.video.ingest import Clip, cache_dir, ingest
 from mog.video.models import Shot, VideoAnalysis
 from mog.video.track import kalman_smooth
 
-ANALYSIS_VERSION = 6
+ANALYSIS_VERSION = 7
 SAMPLE_FPS = 10.0
 MAX_SAMPLES = 1800
 SAMPLE_DIM = 480        # decode size for face detection

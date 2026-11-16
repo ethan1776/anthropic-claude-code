@@ -168,4 +168,30 @@ Optical flow and motion blur cost time. On this 4-core machine at 1080x1920 30 f
   - `python -m mog reframe CLIP --out x.mp4`: whole clip reframed to 9:16.
 - **145 tests.**
 
-### Next: Phase 5, edit planner and presets
+## Phase 5: Edit planner and presets. Done
+
+### What's done
+- **5 presets as JSON** (`presets/*.json`, validated by `planner/presets.py`): Dark Triad, Mog, Velocity, Drift Phonk, Clean Sigma. There's no style logic in Python; add a style by adding a JSON file.
+- **Planner** (`planner/planner.py`), the "director brain". It produces a timeline JSON:
+  - **build-up:** cuts on bars or half-bars, medium-energy shots, and the last stretch speeds up into the drop;
+  - **drop:** flash + zoom punch + shake (the strongest punch of the edit), with the best "stare" shot in slow motion for 1–2 bars;
+  - **after the drop:** cuts on every beat (fewer in calm bars), velocity ramps that snap from fast to slow exactly on downbeats (motion blur in the fast part, punch on the snap), action shots, plus effects on kicks, snares and cowbells per preset.
+- **Rules enforced and tested:**
+  - every cut on a beat;
+  - at most one flash per beat and one bass shake per bar;
+  - never the same transition 3 times in a row;
+  - no footage reused (when there isn't enough, reused with a different crop, plus a warning);
+  - footage always fits inside its shot;
+  - clips balanced across the edit;
+  - same seed gives the same edit, and clip order doesn't matter.
+- **Intensity (0–1)** scales effect density and strength.
+- **Auto exposure:** each shot's suggested exposure is applied (per preset).
+- **Pipeline** (`pipeline.py`) and CLI `python -m mog make --clips ... --audio ... --preset mog --length 15`, with progress stages "Finding the beat", "Scouting shots", "Directing", "Rendering".
+- **Fixes found on real footage:**
+  - one long, sharp clip dominated the edit (now balanced);
+  - a phone status bar drawn over moving video wasn't trimmed (portrait footage taller than 2:1 is treated as a screen recording);
+  - beat-spacing jitter created a 0.01 s sliver segment (ramps now start on the actual previous beat; slivers are merged).
+- **Speed fixes** (motion blur uses real frames when available; flow maths at low resolution). A 15 s edit from 3 clips went from 145 s to 65 s. With clips already analysed, each 15 s edit takes 46–56 s on this 4-core machine; a first run adds clip analysis (about 15–100 s depending on clip length).
+- **167 tests.**
+
+### Next: Phase 6, API, job queue and Docker Compose

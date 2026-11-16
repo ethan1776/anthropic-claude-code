@@ -1,0 +1,15 @@
+{
+  "id": "clean_sigma",
+  "name": "Clean Sigma",
+  "description": "Subtle: light grade, cuts on the beat, one zoom on the drop, no shake.",
+  "grade": { "lut": "clean_film.cube", "contrast": 1.05, "grain": 0.1, "vignette": 0.2 },
+  "cuts": { "pre_drop": "bar", "post_drop": "beat", "calm_post_drop": "half_bar" },
+  "speed": { "pre_drop": 1.0, "build_ramp": 1.0, "stare_speed": 0.5, "stare_bars": 1,
+             "velocity_ramps": false, "ramp_every_bars": 2, "ramp_fast": 2.0, "ramp_slow": 0.5 },
+  "effects": { "drop_flash_frames": 0, "drop_punch": 1.2, "drop_shake": 0,
+               "punch_on": "none", "flash_on_cuts": 0.0, "shake_on_bass": 0.0,
+               "rgb_on": "none", "motion_blur": 0.0 },
+  "auto_exposure": true,
+  "text_font": "Inter",
+  "text_anim": "fade"
+}

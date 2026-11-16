@@ -1,0 +1,14 @@
+{
+  "id": "dark_triad",
+  "name": "Dark Triad",
+  "description": "Full black & white, crushed blacks, heavy grain, slow-mo stares, sparse but brutal flashes.",
+  "grade": { "lut": "bw_crush.cube", "contrast": 1.25, "saturation": 0.0, "black_crush": 0.06,
+             "grain": 0.45, "vignette": 0.5, "glow": 0.05 },
+  "cuts": { "pre_drop": "bar", "post_drop": "beat", "calm_post_drop": "bar" },
+  "speed": { "pre_drop": 1.0, "build_ramp": 1.8, "stare_speed": 0.3, "stare_bars": 2,
+             "velocity_ramps": false, "ramp_every_bars": 2, "ramp_fast": 2.5, "ramp_slow": 0.3 },
+  "effects": { "drop_flash_frames": 3, "drop_punch": 1.25, "drop_shake": 22,
+               "punch_on": "none", "flash_on_cuts": 0.12, "flash_frames": 3,
+               "shake_on_bass": 0.0, "rgb_on": "none", "motion_blur": 0.0 },
+  "text_font": "Cinzel"
+}

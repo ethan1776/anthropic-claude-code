@@ -63,6 +63,10 @@ def _trim(activity: np.ndarray, texture: np.ndarray, allow_frozen: bool,
     return a, b
 
 
+PHONE_ASPECT = 2.0       # portrait taller than this can only be a phone screen recording
+PHONE_STATUS_BAR = 0.06  # status bar / Dynamic Island, drawn over the video by the phone
+
+
 def content_bounds(frames: list[np.ndarray]) -> tuple[float, float, float, float]:
     """frames: grey (H, W) uint8 samples spread over the clip. Returns (x0, y0, x1, y1) fractions."""
     if len(frames) < 3:
@@ -83,4 +87,9 @@ def content_bounds(frames: list[np.ndarray]) -> tuple[float, float, float, float
     y1 = max(y1 - my if y1 < h else h, y0 + 1)
     x0 = min(x0 + mx if x0 > 0 else 0, w - 1)
     x1 = max(x1 - mx if x1 < w else w, x0 + 1)
-    return (round(x0 / w, 4), round(y0 / h, 4), round(x1 / w, 4), round(y1 / h, 4))
+    fy0 = y0 / h
+    if h / w >= PHONE_ASPECT:
+        # Cameras record 16:9 (1.78); taller frames are phone screen recordings, whose status
+        # bar is drawn OVER moving video (so it isn't "frozen"): always drop it
+        fy0 = max(fy0, PHONE_STATUS_BAR)
+    return (round(x0 / w, 4), round(fy0, 4), round(x1 / w, 4), round(y1 / h, 4))

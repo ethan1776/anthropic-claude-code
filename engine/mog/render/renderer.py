@@ -55,9 +55,11 @@ def _even(x: float) -> int:
 
 
 def render(tl: Timeline, out_path: str | Path, media_dir: str | Path, preview: bool = False,
-           progress: Progress | None = None, interpolation: str | None = None) -> RenderResult:
-    """interpolation: how slow motion is smoothed. "fast" / "high" (optical flow, see
-    source.py) or "off" (repeat frames). Default: fast for previews, high for export."""
+           progress: Progress | None = None, interpolation: str | None = None,
+           quality: str | None = None) -> RenderResult:
+    """preview: half resolution, fast encode.
+    quality: "fast" or "high" (export quality toggle): slow-mo smoothing and encoder effort.
+    interpolation: override slow-mo smoothing: "fast" / "high" (optical flow) or "off"."""
     t_start = time.time()
     out_path = Path(out_path)
     media_dir = Path(media_dir)
@@ -84,9 +86,14 @@ def render(tl: Timeline, out_path: str | Path, media_dir: str | Path, preview: b
     W, H = tl.output.width, tl.output.height
     if preview:
         W, H = _even(W / 2), _even(H / 2)
+    q = quality or ("fast" if preview else "high")
+    if q not in ("fast", "high"):
+        raise MogError(f"quality must be fast or high (got {q!r})")
     settings = EncodeSettings.preview() if preview else EncodeSettings.export()
-    quality = "fast" if preview else "high"
-    interp = interpolation or ("fast" if preview else "high")
+    if not preview and q == "fast":
+        settings.preset = "veryfast"
+    quality = "fast" if (preview or q == "fast") else "high"   # warp interpolation
+    interp = interpolation or q
     if interp not in ("off", "fast", "high"):
         raise MogError(f"interpolation must be off, fast or high (got {interp!r})")
     total = int(round(tl.output.duration * fps))

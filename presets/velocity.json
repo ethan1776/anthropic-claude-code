@@ -1,0 +1,15 @@
+{
+  "id": "velocity",
+  "name": "Velocity",
+  "description": "Colour kept, aggressive speed ramps on every downbeat, motion blur, lots of cuts.",
+  "grade": { "lut": "velocity_punch.cube", "contrast": 1.1, "black_crush": 0.02,
+             "grain": 0.15, "vignette": 0.3, "glow": 0.05 },
+  "cuts": { "pre_drop": "half_bar", "post_drop": "beat", "calm_post_drop": "beat" },
+  "speed": { "pre_drop": 1.15, "build_ramp": 2.8, "stare_speed": 0.35, "stare_bars": 1,
+             "velocity_ramps": true, "ramp_every_bars": 1, "ramp_fast": 3.0, "ramp_slow": 0.3 },
+  "effects": { "drop_flash_frames": 2, "drop_punch": 1.25, "drop_shake": 20,
+               "punch_on": "downbeat", "punch_strength": 1.12, "punch_prob": 0.5,
+               "flash_on_cuts": 0.25, "flash_frames": 2, "shake_on_bass": 0.0,
+               "rgb_on": "none", "motion_blur": 0.8 },
+  "text_font": "Anton"
+}

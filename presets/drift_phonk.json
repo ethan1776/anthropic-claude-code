@@ -1,0 +1,15 @@
+{
+  "id": "drift_phonk",
+  "name": "Drift Phonk",
+  "description": "Saturated night colours, glow, RGB split on cowbells, shake on the bass.",
+  "grade": { "lut": "night_drift.cube", "lut_strength": 0.85, "saturation": 1.1, "contrast": 1.1,
+             "grain": 0.2, "vignette": 0.4, "glow": 0.3 },
+  "cuts": { "pre_drop": "bar", "post_drop": "beat", "calm_post_drop": "half_bar" },
+  "speed": { "pre_drop": 1.0, "build_ramp": 2.0, "stare_speed": 0.4, "stare_bars": 1.5,
+             "velocity_ramps": true, "ramp_every_bars": 2, "ramp_fast": 2.5, "ramp_slow": 0.4 },
+  "effects": { "drop_flash_frames": 2, "drop_punch": 1.2, "drop_shake": 28,
+               "punch_on": "none", "flash_on_cuts": 0.15, "flash_frames": 2, "flash_color": "#C77DFF",
+               "shake_on_bass": 0.6, "shake_intensity": 14,
+               "rgb_on": "cowbell", "rgb_prob": 0.5, "motion_blur": 0.4 },
+  "text_font": "Anton"
+}
