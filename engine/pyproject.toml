@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mog"
+version = "0.1.0"
+description = "Auto phonk / velocity edit generator"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=1.26",
+  "scipy>=1.11",
+  "librosa>=0.10.2",
+  "soundfile>=0.12",
+  "matplotlib>=3.8",
+  "pydantic>=2.6",
+]
+
+[project.optional-dependencies]
+# ML beat/downbeat tracker. Large (PyTorch). The app falls back to librosa without it.
+beats = [
+  "torch>=2.2",
+  "torchaudio>=2.2",
+  "beat_this @ https://github.com/CPJKU/beat_this/archive/main.zip",
+]
+dev = ["pytest>=8"]
+
+[tool.setuptools.packages.find]
+include = ["mog*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
